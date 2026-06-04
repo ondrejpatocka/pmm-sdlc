@@ -145,7 +145,7 @@ Allowed statuses: `New`, `Open`, `To Do`.
 - If the status is allowed, continue.
 - If not, write a one-line skipped report and stop the workflow:
 
-  Filename: `pmm/temp/Triage-skipped-<KEY>-<slug>-<YYYYMMDD-HHMMSS>.md`
+  Filename: `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/Triage-skipped-<KEY>-<slug>-<YYYYMMDD-HHMMSS>.md`
 
   Content (single line plus header):
 
@@ -347,8 +347,8 @@ Re-running is allowed and expected. Because the timestamp is part of the filenam
 
 | Artifact | Pattern |
 |---|---|
-| Main report (Jira snapshot + all analysis) | `pmm/temp/Triage-report-<KEY>-<slug>-<YYYYMMDD-HHMMSS>.md` |
-| Skipped (status gate) | `pmm/temp/Triage-skipped-<KEY>-<slug>-<YYYYMMDD-HHMMSS>.md` |
+| Main report (Jira snapshot + all analysis) | `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/Triage-report-<KEY>-<slug>-<YYYYMMDD-HHMMSS>.md` |
+| Skipped (status gate) | `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/Triage-skipped-<KEY>-<slug>-<YYYYMMDD-HHMMSS>.md` |
 
 Where:
 
