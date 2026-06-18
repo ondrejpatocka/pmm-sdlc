@@ -79,7 +79,7 @@ Write the header immediately, before any Jira fetch or analysis, so an aborted r
 - pmm HEAD: <commit short SHA>
 - Mode: assisted | autonomous
 - Operator: <user@host or "autonomous">
-- Assistant: <name and version, e.g. "Cursor / Claude Sonnet", "Claude Code", "Copilot Chat">
+- Assistant: <tool name + exact LLM model and version, e.g. "Claude Code / claude-sonnet-4-6", "Cursor / claude-opus-4-7", "Copilot Chat / gpt-4o-2024-11-20", "Gemini CLI / gemini-2.5-pro". Always record the underlying model ID or version string, not just the tool name.>
 ```
 
 ### 2.3 Fetch and append the Jira ticket snapshot
