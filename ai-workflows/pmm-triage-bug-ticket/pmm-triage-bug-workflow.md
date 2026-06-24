@@ -4,7 +4,7 @@ A repeatable workflow for triaging a single PMM Jira bug ticket. Produces a loca
 
 This document is intentionally tool-agnostic. It describes **what** an AI assistant (or a human) should do at each step and **what** to write to disk — not which CLI, MCP, IDE, or API to use. Pick whichever assistant fits your environment.
 
-> **Cardinal rule:** Never treat Jira text alone as proof the bug still exists on current `v3`. Verify against the current code in Step 5 before drawing conclusions.
+> **Cardinal rule:** Never treat Jira text alone as proof the bug still exists on current `main`. Verify against the current code in Step 5 before drawing conclusions.
 
 ## How to invoke this workflow
 
@@ -43,7 +43,7 @@ Fail fast if any of these is false. Record what failed and stop.
 
 - The Jira ticket URL is provided (example: `https://perconadev.atlassian.net/browse/PMM-15076`).
 - Jira is reachable with the operator's access (any method: MCP, REST, browser fetch, manual paste).
-- The `pmm` repo is checked out at the current `v3` branch. Record the branch name and HEAD commit in the report header.
+- The `pmm` repo is checked out at the current `main` branch. Record the branch name and HEAD commit in the report header.
 - `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/` exists inside the `pmm-sdlc` working tree. If missing, create it.
 
 ## 2. Fetch the Jira ticket and initialize the report
@@ -217,7 +217,7 @@ Pick one or more components (cap at 3; pick the most likely if more match). Stat
 
 Mark any that apply (none, one, or several). Each flag must have a one-sentence justification.
 
-- **Obsolete / not relevant** — already fixed on `v3`, duplicate of another ticket, feature removed, or only affects EOL versions with no supported backport path.
+- **Obsolete / not relevant** — already fixed on `main`, duplicate of another ticket, feature removed, or only affects EOL versions with no supported backport path.
 - **Not a bug** — works as designed, user misunderstanding, needs documentation or training instead of code.
 - **Not a sensible PMM code change** — wrong product, support / config issue only, no credible change in this repo matches the report.
 - **Should not be fixed** — security, compatibility, or product policy implies "Won't Fix" or "Not a bug" is the right Jira outcome.
@@ -247,7 +247,7 @@ Search every repo checked out under the parent directory of the `pmm` repo (a co
 ### 5.3 What to record
 
 - File paths and line numbers cited as `repo/path/to/file.go:123`.
-- One of: `Still present on v3` / `Appears fixed on v3` / `Not located — symptom area unclear`.
+- One of: `Still present on main` / `Appears fixed on main` / `Not located — symptom area unclear`.
 - Short rationale (≤3 sentences) — what the code does today vs. what the ticket reports.
 
 ## 6. De-duplication
