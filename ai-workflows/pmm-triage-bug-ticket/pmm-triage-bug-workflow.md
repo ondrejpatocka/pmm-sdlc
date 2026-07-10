@@ -4,7 +4,7 @@ A repeatable workflow for triaging a single PMM Jira bug ticket. Produces a loca
 
 This document is intentionally tool-agnostic. It describes **what** an AI assistant (or a human) should do at each step and **what** to write to disk — not which CLI, MCP, IDE, or API to use. Pick whichever assistant fits your environment.
 
-> **Cardinal rule:** Never treat Jira text alone as proof the bug still exists on current `main`. Verify against the current code in Step 5 before drawing conclusions.
+> **Cardinal rule:** Never treat Jira text alone as proof the bug still exists on current `main`. Verify against the current code in §5 before drawing conclusions.
 
 ## How to invoke this workflow
 
@@ -19,9 +19,15 @@ Suggested ways to invoke it with the most common assistants:
 - **Cursor IDE:** open this file in your workspace, then prompt: *"Follow `pmm-triage-bug-workflow.md` for ticket `<URL>`."* Optionally save a slimmer copy as a Cursor rule under `.cursor/rules/` to attach it automatically.
 - **Claude (Code, Desktop, or API):** attach this file as context, then prompt: *"Use the attached workflow to triage `<URL>`."* In Claude Code, place a copy at the repo root or under `.claude/` so it's picked up by default.
 - **GitHub Copilot Chat:** open this file in the editor, then in the chat panel use `#file:pmm-triage-bug-workflow.md` and prompt: *"Triage `<URL>` per this workflow."*
-- **CLI / scripted runs:** pipe the workflow plus the ticket URL into your assistant of choice; the workflow's autonomous-mode behavior (see §0 and §9) is designed for unattended runs.
+- **CLI / scripted runs:** pipe the workflow plus the ticket URL into your assistant of choice; the workflow's autonomous-mode behavior (see §0 and §10) is designed for unattended runs.
 
-Whichever you use, the assistant must respect the guardrails in §0 (read-only Jira/GitHub, local-only outputs) and emit the same report layout (see Appendix B).
+**Run each ticket in a fresh session (required — see the stateless guardrail in §0).** One ticket per session so a previous ticket's context, memory, or cached data cannot bias the next:
+
+- **Claude Code:** prefer a one-shot headless run per ticket — e.g. `claude -p "Follow pmm-triage-bug-workflow.md for <URL>"` — because each `-p` invocation starts with empty conversation history. Interactively, run `/clear` between tickets. Do **not** use `--continue` / `--resume` (they restore the prior conversation). Loading `CLAUDE.md` and this workflow doc is fine — that is instruction context, not prior-run state.
+- **Cursor / Claude Desktop / Copilot Chat:** open a **new chat** per ticket instead of continuing an existing thread; re-attach the workflow doc each time.
+- **Scripted / scheduled runs:** invoke a new assistant process per ticket and pass only the workflow doc + ticket URL; never reuse a session/handle across tickets.
+
+Whichever you use, respect the §0 guardrails and emit the Appendix B report layout.
 
 ## 0. Modes & guardrails
 
@@ -36,35 +42,30 @@ The assistant must:
 - Never modify the Jira ticket, never open PRs, never push commits.
 - Write only to `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/` inside the `pmm-sdlc` repo working tree.
 - Record every irreversible decision (label/component choices, verdict, blocked questions) in the report so the human has an audit trail.
+- **Start each run stateless.** Base the triage on exactly three inputs — this workflow document, the ticket URL, and the current state of the checked-out repos. Do **not** carry over conversation history, recalled memory, cached fetches, or earlier `audit-log/` reports (those are outputs, not inputs); re-fetch Jira and re-read code **live**. Every verdict must be reproducible from the ticket + code alone. (Per-tool clean-session mechanics: see the invoke section.)
 
 ## 1. Preconditions
 
 Fail fast if any of these is false. Record what failed and stop.
 
 - The Jira ticket URL is provided (example: `https://perconadev.atlassian.net/browse/PMM-15076`).
-- Jira is reachable with the operator's access (any method: MCP, REST, browser fetch, manual paste).
+- The Jira ticket is readable by a method in §2.3. Note: fetching the `/browse/<KEY>` web page yields **no data** (it's a JavaScript app that only renders in a logged-in browser) — use the REST endpoint instead. A login or empty page is never proof the ticket is missing.
 - The `pmm` repo is checked out at the current `main` branch. Record the branch name and HEAD commit in the report header.
 - `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/` exists inside the `pmm-sdlc` working tree. If missing, create it.
 
 ## 2. Fetch the Jira ticket and initialize the report
 
-This step produces the single report file used for the rest of the workflow. Every later step appends to the same file; nothing else is written elsewhere.
+This step produces the single report file used for the rest of the workflow. Every later step appends its own section to this file (Appendix B lists the section order); nothing else is written elsewhere.
 
 ### 2.1 Create the report file
 
-Create:
+Create (naming rules in Appendix A; timestamp leads so reports sort chronologically):
 
 ```
-pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/Triage-report-<KEY>-<slug>-<YYYYMMDD-HHMMSS>.md
+pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/<YYYYMMDD-HHMMSS>-Triage-<KEY>-<slug>.md
 ```
 
-File requirements:
-
-- UTF-8 encoding, no BOM.
-- LF line endings.
-- Human-readable on Windows, macOS, and Linux.
-- `<slug>` is derived from the issue summary, lowercased ASCII, characters restricted to `[a-z0-9-]`, capped at 50 chars (truncate at a word boundary).
-- `<YYYYMMDD-HHMMSS>` is the operator's **local** time at run start.
+File requirements: UTF-8 (no BOM), LF line endings, human-readable on Windows/macOS/Linux.
 
 ### 2.2 Write the run header
 
@@ -74,17 +75,31 @@ Write the header immediately, before any Jira fetch or analysis, so an aborted r
 # Triage report — <KEY>
 
 - Ticket: <full Jira URL>
-- Run started: <YYYY-MM-DD HH:MM:SS local, UTC±HH:MM>
+- Session start: <YYYY-MM-DD HH:MM:SS local, UTC±HH:MM>
+- Session end: <YYYY-MM-DD HH:MM:SS local, UTC±HH:MM>   <!-- backfilled at completion -->
+- Session duration: <e.g. 4m 12s>                       <!-- backfilled at completion -->
 - pmm branch: <branch name>
 - pmm HEAD: <commit short SHA>
 - Mode: assisted | autonomous
 - Operator: <user@host or "autonomous">
-- Assistant: <tool name + exact LLM model and version, e.g. "Claude Code / claude-sonnet-4-6", "Cursor / claude-opus-4-7", "Copilot Chat / gpt-4o-2024-11-20", "Gemini CLI / gemini-2.5-pro". Always record the underlying model ID or version string, not just the tool name.>
+- Assistant: <tool name + exact LLM model and version, e.g. "Claude Code / claude-opus-4-8", "Cursor / claude-opus-4-7", "Copilot Chat / gpt-4o-2024-11-20", "Gemini CLI / gemini-2.5-pro". Always record the underlying model ID or version string, not just the tool name.>
 ```
+
+`Session start` is stamped when the header is written. `Session end` and `Session duration` are left as placeholders here and **backfilled as the last write of the run** (in both normal completion and the `[BLOCKED: needs-human]` / skipped exits), so every report on disk records how long the triage took.
 
 ### 2.3 Fetch and append the Jira ticket snapshot
 
-Capture the following fields from the ticket and append them under a `## Ticket snapshot` section in the report. This snapshot is the input to every analysis step that follows.
+Build the `## Ticket snapshot` section from the ticket; it is the input to every analysis step that follows.
+
+**Getting the ticket data** (try in order; use the first that yields data):
+
+1. **Authenticated Atlassian MCP — escalation.** If REST returns 401/403 (restricted ticket) or omits a field you need (e.g. comments not visible anonymously), use the Atlassian connector: find a tool whose name ends in `searchJiraIssuesUsingJql` (or run `ToolSearch` with `select:searchJiraIssuesUsingJql`) and call it with `cloudId: perconadev.atlassian.net`, `jql: key = <KEY>`, `responseContentFormat: markdown`. Requires the connector authorized (claude.ai → Settings → Connectors, or `/mcp` in Claude Code) — the same access the `fetch-release-jira-tickets` skill uses.
+2. **Unauthenticated REST API — primary, no setup.** Fetch `https://perconadev.atlassian.net/rest/api/3/issue/<KEY>?fields=summary,status,issuetype,priority,description,components,labels,fixVersions,versions,resolution,reporter,assignee,created,updated,parent,issuelinks,comment,attachment`. For public PMM tickets this returns JSON with (almost) every field below — no token, no connector. Field-name notes: `key` is in the response root; `versions` = affectsVersions, `comment` = comments, `attachment` = attachments. The v3 `description` is ADF (JSON) — add `&expand=renderedFields` for HTML, or use `/rest/api/2/issue/<KEY>` for wiki/plain-text fields if ADF is awkward.
+3. **Manual paste — last resort.** Ask the operator to paste the ticket; build the snapshot from that.
+
+**Never fetch `/browse/<KEY>` for data** — it returns an empty JavaScript SPA shell. Record the method + endpoint used in the snapshot. If only some fields came back, stamp the snapshot `⚠ Partial — <fields missing>` and continue; do not stop.
+
+Capture these fields:
 
 - `key`, `issuetype`, `summary`, `priority`, `status`
 - `components`, `labels`, `fixVersions`, `affectsVersions`, `resolution`
@@ -93,9 +108,9 @@ Capture the following fields from the ticket and append them under a `## Ticket 
 - `description` (full text)
 - All comments (author, timestamp, body)
 - All issue links (relation + target key + target summary)
-- Attachments list (filename + URL) — needed for the Evidence check in Step 4
+- Attachments list (filename + URL) — needed for the Supporting evidence check in §4.1
 
-If the ticket cannot be read, append a one-line note to the report explaining why and stop the workflow. Do not delete the partially-written report — the header alone is still useful as an audit trail.
+If **no** method yields usable data: in **assisted mode**, ask the operator to paste the ticket (or authorize the connector) and record the exchange; in **autonomous mode**, finish a header-only report named `<YYYYMMDD-HHMMSS>-Triage-<KEY>-jira-unreachable.md`, list the methods tried and why each failed, and stop. Never delete the partially-written report — the header alone is still useful as an audit trail.
 
 Suggested layout for the snapshot section:
 
@@ -145,7 +160,7 @@ Allowed statuses: `New`, `Open`, `To Do`.
 - If the status is allowed, continue.
 - If not, write a one-line skipped report and stop the workflow:
 
-  Filename: `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/Triage-skipped-<KEY>-<slug>-<YYYYMMDD-HHMMSS>.md`
+  Filename: `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/<YYYYMMDD-HHMMSS>-Triage-skipped-<KEY>-<slug>.md`
 
   Content (single line plus header):
 
@@ -153,14 +168,14 @@ Allowed statuses: `New`, `Open`, `To Do`.
   Skipped: status=<actual status>. Triage workflow only runs on New / Open / To Do.
   ```
 
-Also check, before continuing:
+If the status is allowed, append a **Status gate** section recording:
 
-- Assignee. If the ticket is assigned to someone other than the triager / unassigned, flag it in the report (do not stop). Triaging an in-flight ticket can step on toes.
-- Existing proposed solutions. Search the ticket's comments, `is fixed by` / `is implemented by` links, and any URLs pointing to `github.com/percona/pmm/pull/...` for an existing fix attempt. Record findings.
+- **Assignee.** If the ticket is assigned to someone other than the triager / unassigned, flag it (do not stop) — triaging an in-flight ticket can step on toes.
+- **Existing proposed solutions.** Search the ticket's comments, `is fixed by` / `is implemented by` links, and any `github.com/percona/pmm/pull/...` URLs for an existing fix attempt. Record findings.
 
 ## 4. Completeness check
 
-Evaluate whether the ticket contains enough information to act. Append a **Completeness** section to the report covering:
+Evaluate whether the ticket contains enough information to act. The **Completeness** section covers:
 
 ### 4.1 Findings
 
@@ -215,7 +230,7 @@ Pick one or more components (cap at 3; pick the most likely if more match). Stat
 
 ### 4.4 Light sanity flags
 
-Mark any that apply (none, one, or several). Each flag must have a one-sentence justification.
+These are **preliminary** gut-checks, not the final call — §7 makes the authoritative classification and §9.2 the outcome. Mark any that clearly apply (none, one, or several), each with a one-sentence justification; don't force a fit.
 
 - **Obsolete / not relevant** — already fixed on `main`, duplicate of another ticket, feature removed, or only affects EOL versions with no supported backport path.
 - **Not a bug** — works as designed, user misunderstanding, needs documentation or training instead of code.
@@ -223,36 +238,84 @@ Mark any that apply (none, one, or several). Each flag must have a one-sentence 
 - **Should not be fixed** — security, compatibility, or product policy implies "Won't Fix" or "Not a bug" is the right Jira outcome.
 - **Stale or empty** — insufficient detail to act; guessing would be irresponsible.
 
-## 5. Code / runtime verification
+## 5. Codebase verification
 
-This is the enforcement step for the cardinal rule. Append a **Codebase verification** section.
+This is the enforcement step for the cardinal rule, and the analytical core of the whole workflow. A shallow "I grepped the error string and it's still there" is **not acceptable**. The goal of this step is to trace the reported symptom to the **specific code that produces it** and state a **root cause**, backed by real links to the current PMM source. Everything after this step (validity, recommended fix, verdict) is only as good as the investigation here.
 
-### 5.1 Scope
+### 5.0 Code-reference convention (used in §5, §7, §8)
 
-Search every repo checked out under the parent directory of the `pmm` repo (a common convention is `$GITHUB_ROOT`), plus any repo explicitly named in the ticket. Oversearch is acceptable; missing the relevant repo is not. Typical hits:
+Cite every code location as a **real GitHub link**, never a bare local path. Form the URL as:
 
-- `pmm` (sub-areas: `managed/`, `agent/`, `admin/`, `api/`, `qan-api2/`, `vmproxy/`, `ui/`, `build/`, `api-tests/`, `dashboards/`).
-- `pmm-qa`.
-- `grafana` (Percona fork).
-- `*_exporter` repos when present.
-- PBM and similar adjacent repos when present.
+```
+https://github.com/<owner>/<repo>/blob/<ref>/<path>#L<startLine>-L<endLine>
+```
 
-### 5.2 What to search for
+- `<owner>` — **`percona` by default** (PMM, the Percona forks, the Percona-maintained exporters). When a root cause sits upstream (validity class (c), §7), link where it actually lives — `grafana/grafana`, `VictoriaMetrics/VictoriaMetrics`, `ClickHouse/ClickHouse`, `prometheus/*`, `mongodb/*` — and record both the Percona-side entry point and the upstream location.
+- `<repo>` — `pmm`, or the actual adjacent repo (`grafana`, `mongodb_exporter`, `percona-backup-mongodb`, `pmm-qa`, …).
+- `<ref>` — the commit SHA from the report header (`pmm HEAD`) for `percona/pmm`, or the SHA/tag you inspected for any other repo. Prefer a SHA (stable permalink); fall back to a branch name only when no SHA is available.
+- Keep the local `repo/path/to/file.go:123` in parentheses after the link so the citation stays greppable.
 
-- Exact error strings or log lines quoted in the ticket.
-- Symptom keywords (feature name, endpoint, metric name, panel title).
-- API surface in `pmm/api/**/*.proto` if the report touches a gRPC or REST contract.
-- Relevant component `AGENTS.md` files for architectural intent.
+Example: `https://github.com/percona/pmm/blob/<HEAD-SHA>/managed/services/agents/channel/channel.go#L120-L138` (`pmm/managed/services/agents/channel/channel.go:120`).
 
-### 5.3 What to record
+### 5.1 PMM architecture & code map (orient here first)
 
-- File paths and line numbers cited as `repo/path/to/file.go:123`.
-- One of: `Still present on main` / `Appears fixed on main` / `Not located — symptom area unclear`.
-- Short rationale (≤3 sentences) — what the code does today vs. what the ticket reports.
+Before searching, orient with the map below. It is embedded here so you can go from symptom to the owning code **without leaving this workflow**. Paths are relative to the `percona/pmm` monorepo root; cite any you land on as GitHub links per §5.0. Treat the **checked-out code as truth** — if a path has moved, trust the checkout and record the divergence in the report. (Each component also carries its own `AGENTS.md` in-repo if you need deeper architectural intent than this map provides.)
+
+**Core data flows** — use these to decide which component owns a symptom:
+
+- **Metrics:** exporters (`node`, `mysqld`, `mongodb`, `postgres`, `proxysql`, `valkey`, `rds`, `azure`) → VMAgent scrapes → VictoriaMetrics (storage) → Grafana (viz); alerting via VMAlert → Alertmanager.
+- **QAN:** QAN agents inside pmm-agent (perfschema, slowlog, `pg_stat_statements`, `pg_stat_monitor`, Mongo profiler) → pmm-managed (gRPC receiver) → qan-api2 (collector) → ClickHouse → UI / Grafana.
+- **Agent communication:** pmm-agent ↔ pmm-managed over a single bidirectional gRPC stream (server sends `SetStateRequest`/`StartAction`/`StartJob`/`Ping`; agent sends `StateChanged`/`QanCollect`/`ActionResult`/`JobResult`/`Pong`).
+- **Backups:** pmm-managed orchestrates → pmm-agent jobs (PBM for MongoDB; `xtrabackup`/`mysqldump` for MySQL) → S3 / MinIO / local.
+- **Inventory domain model:** `Node → Service → Agent` (a Node has many Services; an Agent `runs_on_node_id` and optionally monitors a `service_id`; child agents belong to a parent `pmm_agent_id`).
+
+**Component → purpose → key code paths:**
+
+| Component (dir) | Purpose | Key code paths (grep/open these first) |
+|---|---|---|
+| **pmm-managed** (`managed/`) | Server backend: inventory, gRPC/REST APIs, VM & Grafana integration, backup, alerting, HA | `managed/cmd/pmm-managed/` (bootstrap & service wiring), `managed/models/` (reform ORM models + `database.go` schema migrations), `managed/services/inventory/` (Node/Service/Agent CRUD + validation), `managed/services/agents/` (agent registry & lifecycle), `managed/services/victoriametrics/` (scrape-config generation), `managed/services/grafana/`, `managed/services/ha/`. gRPC :7771, REST :7772. |
+| **pmm-agent** (`agent/`) | Client agent: runs exporters, QAN/RTA collectors, actions, backup/restore jobs | `agent/commands/run.go` (main event loop), `agent/agents/supervisor/` (reconciles desired↔actual state), `agent/agents/process/` (exporter process state machine), `agent/client/` (gRPC stream handler), `agent/runner/actions/` (explain, pt-summary), `agent/runner/jobs/` (backup/restore), `agent/agents/{mysql,postgres,mongodb}/` (built-in collectors). No DB — state comes from managed via gRPC. |
+| **pmm-admin** (`admin/`) | CLI to add/remove monitored services | `admin/cmd/pmm-admin/main.go`, `admin/commands/management/` (e.g. `add_mysql.go`), `admin/commands/inventory/`, `admin/commands/base.go`. Kong CLI; talks to managed via **generated Swagger HTTP clients** (`api/*/json/client/`), not gRPC. |
+| **API** (`api/`) | Protobuf contracts — source of truth for gRPC/REST + validation | `api/inventory/v1/`, `api/management/v1/`, `api/qan/v1/`, `api/backup/v1/`, `api/alerting/v1/`, `api/server/v1/`; `api/buf.gen.yaml`. Edit `.proto` only, regenerate with `make gen`. **Never edit** `*.pb.go`, `*.pb.gw.go`, `json/client/`. |
+| **qan-api2** (`qan-api2/`) | QAN backend: ingest into ClickHouse, serve analytics | `qan-api2/main.go`, `qan-api2/db.go` (ClickHouse conn + migrations), `qan-api2/models/data_ingestion.go` (`MetricsBucket` batched writer), `qan-api2/models/reporter.go` (dynamic SQL report builder), `qan-api2/services/receiver/` (agent ingestion), `qan-api2/services/analytics/` (report queries), `qan-api2/migrations/sql/`. Raw SQL — no ORM. |
+| **vmproxy** (`vmproxy/`) | VictoriaMetrics reverse proxy injecting LBAC label filters | `vmproxy/main.go`, `vmproxy/proxy/proxy.go` (reads `X-Proxy-Filter` header → injects `extra_filters[]`). Stateless; invalid header → 412. |
+| **UI** (`ui/`) | React/TS frontend (runs inside the Grafana iframe) | `ui/apps/pmm/src/router.tsx` (routes), `ui/apps/pmm/src/Providers.tsx` (Auth/Settings/Theme contexts), `ui/apps/pmm/src/api/` (API clients), `ui/apps/pmm/src/hooks/` (React Query hooks per API domain), `ui/packages/shared/src/messenger.ts` (cross-frame Grafana comms). TanStack Query + MUI; Vite. |
+| **Grafana dashboards** (`dashboards/dashboards/`) | Dashboard JSON by DB/domain | `dashboards/dashboards/{MySQL,MongoDB,PostgreSQL,OS,Valkey}/`, `.../Insight/`, `.../PMM Health/`, `.../Query Analytics/`; `dashboards/misc/cleanup-dash.py` normalizes exported JSON. |
+| **QAN app** (`dashboards/pmm-app/`) | Grafana plugin bundling dashboards + the QAN panel | `dashboards/pmm-app/src/plugin.json` (manifest & dashboard includes), `dashboards/pmm-app/src/module.ts`, `dashboards/pmm-app/src/pmm-qan/panel/QueryAnalytics.tsx` (root QAN panel), `.../panel/components/` (Overview/Details/Filters/BarChart). |
+| **API tests** (`api-tests/`) | Integration tests against a live server | `api-tests/init.go`, `api-tests/helpers.go`, `api-tests/{inventory,management,alerting,backup,server,user}/` (e.g. `management/mysql_test.go`). Uses the Swagger clients; needs a running server (`make env-up`). |
+| **Build & packaging** (`build/`) | Docker, RPM/DEB, Ansible, AMI | `build/docker/server/Dockerfile.el9` + `entrypoint.sh`, `build/packages/{rpm,deb}/`, `build/ansible/roles/` (clickhouse, grafana, postgres, nginx, supervisord, dashboards…), `build/packer/pmm.json`. Ansible roles are the source of truth for server setup. |
+
+**Adjacent code (outside the monorepo):** root causes often bottom out in the exporters (metrics collection), the Grafana fork (visualization), or PBM (MongoDB backups) — see §5.2 for the repo list and search scope, and §5.0 for linking non-`percona` upstreams.
+
+### 5.2 Scope
+
+Search every repo checked out under the parent directory of the `pmm` repo (a common convention is `$GITHUB_ROOT`), plus any repo explicitly named in the ticket. Oversearch is acceptable; missing the relevant repo is not. Typical hits, with their GitHub homes:
+
+- `pmm` — <https://github.com/percona/pmm> (sub-areas map to the §5.1 component map: `managed/`, `agent/`, `admin/`, `api/`, `qan-api2/`, `vmproxy/`, `ui/`, `build/`, `api-tests/`, `dashboards/`).
+- `pmm-qa` — <https://github.com/percona/pmm-qa>.
+- `grafana` (Percona fork) — <https://github.com/percona/grafana>.
+- `*_exporter` repos when present — e.g. <https://github.com/percona/mongodb_exporter>, <https://github.com/percona/mysqld_exporter>, <https://github.com/percona/postgres_exporter>.
+- `percona-backup-mongodb` (PBM) and similar adjacent repos when present — <https://github.com/percona/percona-backup-mongodb>.
+
+### 5.3 How to investigate (drive to root cause, do not stop at the symptom)
+
+Do not stop at the first line that mentions the symptom. Follow the call path until you can explain *why* the reported behavior happens:
+
+1. **Locate the symptom surface** — the exact error string / log line / metric name / panel title / endpoint quoted in the ticket. Grep the repos for it.
+2. **Trace inward** — from that surface, follow the call chain (handler → service → store → agent RPC, or UI component → API client → gRPC method) using the §5.1 component map. Note each hop as a GitHub link.
+3. **Cross the boundary when needed** — if the symptom originates in the API contract, read the relevant `.proto` under `api/` (<https://github.com/percona/pmm/tree/main/api>); if it originates in data collection, cross into the exporter or agent repo; if in presentation, into `dashboards/` or `ui/`.
+4. **Confirm the mechanism** — identify the precise construct responsible (a wrong condition, a missing nil-check, an incorrect query, a version guard, a default value, a race). State it in one sentence.
+5. **Check the reproduction reality** — does the current code path still allow the reported inputs to reach the faulty construct? Cross-check version guards and any tests under `api-tests/` (<https://github.com/percona/pmm/tree/main/api-tests>) that pin current behavior.
+
+### 5.4 What to record
+
+- **Root cause** — one to three sentences naming the responsible code construct and mechanism (not just "the bug is in QAN"). If a root cause genuinely cannot be pinned, say so explicitly and mark the symptom area as unclear rather than guessing.
+- **Evidence trail** — the ordered list of GitHub links (per §5.0) walked from symptom surface to root cause, each with a one-line note on what that code does.
+- **References consulted** — which parts of the §5.1 map you used to orient, plus any component `AGENTS.md` or docs you opened for deeper detail.
+- **Status on `main`** — one of: `Still present on main` / `Appears fixed on main` / `Not located — symptom area unclear`.
+- **Rationale** (≤3 sentences) — what the code does today vs. what the ticket reports.
 
 ## 6. De-duplication
-
-Append a **De-duplication** section.
 
 ### 6.1 Search surfaces (in order)
 
@@ -273,15 +336,15 @@ Append a **De-duplication** section.
 
 ## 7. Validity assessment
 
-Append a **Validity assessment** section. Just because a user does not like how something works does not mean it's a bug.
+The **Validity assessment**: just because a user does not like how something works does not mean it's a bug.
 
-Cross-check sources, in priority order, when deciding "as designed":
+Cross-check sources, in priority order, when deciding "as designed". Cite each as a GitHub link per the §5.0 convention:
 
-1. API contract: `.proto` files under `pmm/api/` (source of truth for behavior).
-2. User docs: `pmm/documentation/` (MkDocs).
-3. Component `AGENTS.md` files (`managed/`, `agent/`, `admin/`, `ui/`, `api/`, `qan-api2/`, `vmproxy/`, `build/`, `api-tests/`, `dashboards/`) for architectural intent.
+1. API contract: `.proto` files under `api/` — <https://github.com/percona/pmm/tree/main/api> (source of truth for behavior).
+2. User docs: `documentation/` (MkDocs) — <https://github.com/percona/pmm/tree/main/documentation>, published at <https://docs.percona.com/percona-monitoring-and-management/>.
+3. The §5.1 component map (and, for deeper detail, each component's in-repo `AGENTS.md`) for architectural intent.
 4. Original feature ticket or acceptance criteria, when linked.
-5. Existing tests under `pmm/api-tests/` — if a test already asserts the current behavior, that's a strong "as designed" signal.
+5. Existing tests under `api-tests/` — <https://github.com/percona/pmm/tree/main/api-tests>. If a test already asserts the current behavior, that's a strong "as designed" signal.
 
 Classify the ticket into exactly one of the following (the 6-way split):
 
@@ -292,13 +355,79 @@ Classify the ticket into exactly one of the following (the 6-way split):
 - **(e) Configuration / environment issue** — user ran client newer than server, unsupported DB version, exposed a DB the docs say isn't supported, hit a known limit (cardinality, retention). Recommend "Not a bug" with a link to the docs page.
 - **(f) Feature request / enhancement** — works as designed; the user wants different behavior. Recommend re-typing the ticket as a feature request.
 
-Include a one-paragraph justification with evidence references (file paths, doc URLs, proto symbols).
+Include a one-paragraph justification with evidence references (GitHub links to proto symbols / code / tests, doc URLs).
 
-## 8. Verdict & recommended actions
+This class drives the §9.2 outcome (so it isn't re-reasoned there):
 
-Append the final **Verdict** section. This is the deliverable.
+| §7 class | Default §9.2 outcome |
+|---|---|
+| (a) Defect / (b) Regression | `Ready for Dev` (or `Needs Info` if under-specified) |
+| (c) Upstream defect | `Upstream tracker — <link>` |
+| (d) Documentation gap | `Documentation` |
+| (e) Configuration / environment | `Won't Fix — works as designed` (or `Needs Info`) |
+| (f) Feature request | `Won't Fix — out of scope` (re-type as feature) |
+| any class, but evidence too thin to act | `Needs Info` / `Insufficient info — escalate to human triager` |
 
-### 8.1 Outcome
+Independently, if §6 found a same-root-cause match, the outcome is `Duplicate of <KEY>` regardless of class.
+
+## 8. Recommended fix
+
+Here you switch hats: act as a **principal engineer** turning the §5 root cause into a concrete, reviewable fix proposal. This is a proposal only (see §0) — no code, PRs, or commits.
+
+Applicability by validity class (from §7):
+
+- **(a) Defect / (b) Regression** — produce the full proposal below.
+- **(c) Upstream defect** — propose the PMM-side change *if* a mitigation, version guard, or workaround belongs in `percona/*`; otherwise state that the fix lives upstream, link the upstream location, and note any PMM-side tracking change.
+- **(d) Documentation gap** — the "fix" is a docs change; point at the `documentation/` page and section, keep the rest light.
+- **(e) Configuration / environment / (f) Feature request** — no code fix; write one line stating why and stop.
+
+For classes that warrant a proposal, cover all five of the following. Ground every claim in the §5 evidence and cite code with §5.0 GitHub links:
+
+### 8.1 Relevant code areas
+
+The specific files / packages / functions the fix touches, each as a GitHub link (repo + `<ref>` + `#L` range). Distinguish the **primary** site (where the root cause lives) from **secondary** sites (callers, tests, generated code, docs) that must change alongside it.
+
+### 8.2 Fix surface
+
+A concise description of *what* changes and the shape of the change — the approach, not a full patch. Note whether it touches an API contract (`.proto`, regenerated stubs), a DB migration, the agent↔server wire protocol, or the UI, since those widen the blast radius. If more than one viable approach exists, give the recommended one first and name the alternative in a sentence.
+
+### 8.3 Key unknowns & risks
+
+What is still unproven and what could go wrong: behavior not yet reproduced, version/compat concerns (client↔server skew, supported DB versions), backward-compatibility of an API or schema change, performance/cardinality impact, and any upstream dependency. State what test or check would retire each unknown.
+
+### 8.4 Relative effort size
+
+A single T-shirt size with a one-line justification:
+
+- `XS` — one-file, few-line change, no contract impact.
+- `S` — localized change in one component, unit-test only.
+- `M` — multi-file within a component, or a contract/UI change with tests.
+- `L` — cross-component (server + agent, or API + UI + tests), migration, or protocol change.
+- `XL` — spans repos (e.g. PMM + exporter/upstream), or needs design sign-off first.
+
+### 8.5 Suggested verification
+
+The test(s) or manual reproduction that would prove the fix works — ideally a new/updated test under `api-tests/` or the component's own test suite, named concretely.
+
+## 9. Verdict
+
+The final section, and the deliverable.
+
+### 9.1 TL;DR
+
+The most-read part of the report: a self-contained brief a busy technical reader (EM, PM, Senior developer) can act on without reading the rest. Write it **last** (after §4–§9 are settled) though it appears first. Keep it to **one screen** — each bullet is a one- to four-sentence distillation of a section below, no new facts; cite the source section and add a §5.0 permalink for code claims. For non-code verdicts (Duplicate / Documentation / Needs Info / Won't Fix), let the **Root cause** and **Recommended fix** bullets shrink to a couple lines — never pad.
+
+Bullets, in this order:
+
+- **Verdict:** the §9.2 outcome + the §7 classification, on one line — e.g. `Ready for Dev · (a) Defect`.
+- **Problem summary:** what breaks, for whom, and under what trigger — the observable symptom in the user's terms (from §4.1).
+- **Impact / scope:** priority and customer impact (single report vs. multiple customers vs. theoretical), the affected component(s) and Tech label (§4.2 / §4.3), affected version(s), and the reproducibility verdict (§4.1).
+- **Root cause:** the responsible code construct and mechanism named in §5, with the key GitHub permalink (§5.0 convention) and status on `main` (`still present` / `fixed`). For non-code outcomes, state the equivalent finding (e.g. "duplicate of PMM-XXXXX", "behaves as designed per <doc>").
+- **Recommended fix:** the §8 approach in short paragraph — the primary code area, the effort size (§8.4), and the single biggest risk/unknown (§8.3). For non-code outcomes, replace with the routing rationale.
+- **Next steps / owner:** the concrete next action and suggested owner (§9.3), plus any duplicate or related keys (§6).
+- **Confidence:** the §9.4 level (`High` / `Medium` / `Low`) plus the one-line "what would change my mind?" — the single piece of evidence or check that would flip the verdict.
+
+### 9.2 Outcome
 
 Pick exactly one:
 
@@ -311,7 +440,7 @@ Pick exactly one:
 - `Upstream tracker — <link>` — keep open as a tracker for an upstream fix.
 - `Insufficient info — escalate to human triager`
 
-### 8.2 Suggested Jira changes
+### 9.3 Suggested Jira changes
 
 A flat list of changes the triager should apply manually. The assistant does not apply them. Each item must be actionable:
 
@@ -321,16 +450,16 @@ A flat list of changes the triager should apply manually. The assistant does not
 - `fixVersion` candidate, if known.
 - Suggested assignee or team, if known.
 
-### 8.3 Confidence
+### 9.4 Confidence
 
 - `High` / `Medium` / `Low`.
 - One sentence answering: "what would change my mind?"
 
-### 8.4 Open questions for the reporter
+### 9.5 Open questions for the reporter
 
 Only populated when the outcome is `Needs Info` or confidence is `Low`. Numbered, specific, answerable.
 
-## 9. Uncertainty & handoff
+## 10. Uncertainty & handoff
 
 If the assistant is genuinely unsure at any step — cannot disambiguate between two components, cannot reproduce from the description, cannot locate the symptom area in code, finds conflicting evidence — do **not** guess.
 
@@ -339,16 +468,16 @@ If the assistant is genuinely unsure at any step — cannot disambiguate between
 
 Both modes must leave the report on disk in a readable state.
 
-## 10. Re-running on the same ticket
+## 11. Re-running on the same ticket
 
-Re-running is allowed and expected. Because the timestamp is part of the filename, each run produces a fresh report; previous reports are preserved for audit. Do not overwrite or delete earlier runs.
+Re-running is allowed and expected. Because the timestamp leads the filename, each run produces a fresh, chronologically-sorted report; previous reports are preserved for audit — do not overwrite or delete earlier runs. Since each run is stateless (§0), re-running the same ticket after `main` has moved is how you confirm whether a bug is still present or now fixed.
 
 ## Appendix A — Filename conventions
 
 | Artifact | Pattern |
 |---|---|
-| Main report (Jira snapshot + all analysis) | `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/Triage-report-<KEY>-<slug>-<YYYYMMDD-HHMMSS>.md` |
-| Skipped (status gate) | `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/Triage-skipped-<KEY>-<slug>-<YYYYMMDD-HHMMSS>.md` |
+| Main report (Jira snapshot + all analysis) | `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/<YYYYMMDD-HHMMSS>-Triage-<KEY>-<slug>.md` |
+| Skipped (status gate) | `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/<YYYYMMDD-HHMMSS>-Triage-skipped-<KEY>-<slug>.md` |
 
 Where:
 
@@ -377,9 +506,19 @@ A run that completes all steps produces a file with the following section order:
 ### Components detected
 ### Light sanity flags
 ## Codebase verification
+### Root cause
+### Evidence trail
+### References consulted
 ## De-duplication
 ## Validity assessment
+## Recommended fix
+### Relevant code areas
+### Fix surface
+### Key unknowns & risks
+### Relative effort size
+### Suggested verification
 ## Verdict
+### TL;DR
 ### Outcome
 ### Suggested Jira changes
 ### Confidence
@@ -394,14 +533,14 @@ This document is intentionally a plain `.md` file so it can be:
 
 - **Forked per repo / per project.** Pin a copy at the project root or in `docs/` and edit the allowed statuses, label list, component list, or repo scope to match your team.
 - **Mirrored as a tool-specific rule.** Cursor (`.cursor/rules/*.mdc`), Claude Code (`.claude/` or `CLAUDE.md`), Continue (`.continuerules`), Aider (`CONVENTIONS.md`), etc. — copy the body, add whatever frontmatter that tool expects, keep the section numbering stable so cross-references survive.
-- **Run unattended.** The autonomous-mode behavior in §0 and §9 is designed for scripted / scheduled runs; pair it with a small wrapper that resolves the ticket URL, invokes your assistant, and archives the resulting report file.
+- **Run unattended.** The autonomous-mode behavior in §0 and §10 is designed for scripted / scheduled runs; pair it with a small wrapper that resolves the ticket URL, invokes your assistant, and archives the resulting report file.
 - **Hardened or relaxed.** If your team wants the assistant to also write Jira comments or change labels, lift the guardrail in §0 explicitly — do not let it drift. If your team wants stricter behavior (e.g. mandatory STR), promote a "Light sanity flag" in §4.4 into a hard gate.
 
 Stable contract (don't break when adapting):
 
 - The single report file path and naming pattern (Appendix A).
 - The section order in Appendix B.
-- The verdict outcomes in §8.1.
+- The verdict outcomes in §9.2.
 - The 6-way split labels in §7.
 
 Everything else — sources to grep, label/component lists, search surfaces, time windows — is meant to be tuned to your team and product.
