@@ -40,7 +40,7 @@ The assistant must:
 
 - Read and act only with the access already configured on the operator's machine (Jira, GitHub, local repos). Do not require a specific tool.
 - Never modify the Jira ticket, never open PRs, never push commits.
-- Write only to `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/` inside the `pmm-sdlc` repo working tree.
+- Write only to `pmm-sdlc/ai-workflows/pmm-triage/audit-log/` inside the `pmm-sdlc` repo working tree.
 - Record every irreversible decision (label/component choices, verdict, blocked questions) in the report so the human has an audit trail.
 - **Start each run stateless.** Base the triage only on this workflow document (and the `../skills/*.md` skills it references), the ticket URL, and the current state of the checked-out repos. Do **not** carry over conversation history, recalled memory, cached fetches, or earlier `audit-log/` reports (those are outputs, not inputs); re-fetch Jira and re-read code **live**. Every verdict must be reproducible from the ticket + code alone. (Per-tool clean-session mechanics: see the invoke section.)
 
@@ -52,7 +52,7 @@ Fail fast if any of these is false. Record what failed and stop.
 - The Jira ticket is readable by the **`pmm-fetch-jira`** skill ([`../skills/pmm-fetch-jira.md`](../skills/pmm-fetch-jira.md), applied in §2.3).
 - The ticket issuetype is **Bug** (otherwise see §3).
 - The `pmm` repo is checked out at the current `main` branch. Record the branch name and HEAD commit in the report header.
-- `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/` exists inside the `pmm-sdlc` working tree. If missing, create it.
+- `pmm-sdlc/ai-workflows/pmm-triage/audit-log/` exists inside the `pmm-sdlc` working tree. If missing, create it.
 
 ## 2. Fetch the Jira ticket and initialize the report
 
@@ -63,7 +63,7 @@ This step produces the single report file used for the rest of the workflow. Eve
 Create (naming rules in Appendix A; timestamp leads so reports sort chronologically):
 
 ```
-pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/<YYYYMMDD-HHMMSS>-Triage-<issueType>-<KEY>-<slug>.md
+pmm-sdlc/ai-workflows/pmm-triage/audit-log/<YYYYMMDD-HHMMSS>-Triage-<issueType>-<KEY>-<slug>.md
 ```
 
 File requirements: UTF-8 (no BOM), LF line endings, human-readable on Windows/macOS/Linux.
@@ -116,7 +116,7 @@ This workflow triages only **Bug** tickets that are still open for triage.
   Skipped: status=<actual status>. Triage only runs on New / Open / To Do.
   ```
 
-  Skipped/redirect filename: `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/<YYYYMMDD-HHMMSS>-Triage-skipped-<issueType>-<KEY>-<slug>.md`
+  Skipped/redirect filename: `pmm-sdlc/ai-workflows/pmm-triage/audit-log/<YYYYMMDD-HHMMSS>-Triage-skipped-<issueType>-<KEY>-<slug>.md`
 
 If the type and status are allowed, append a **Gate** section recording:
 
@@ -180,7 +180,7 @@ Pick one or more components (cap at 3; pick the most likely if more match). Stat
 
 ### 4.4 Light sanity flags
 
-These are **preliminary** gut-checks, not the final call — §7 makes the authoritative classification and §9.2 the outcome. Mark any that clearly apply (none, one, or several), each with a one-sentence justification; don't force a fit.
+These are **preliminary** gut-checks, not the final call — §7 makes the authoritative classification and §9.1 the outcome. Mark any that clearly apply (none, one, or several), each with a one-sentence justification; don't force a fit.
 
 - **Obsolete / not relevant** — already fixed on `main`, duplicate of another ticket, feature removed, or only affects EOL versions with no supported backport path.
 - **Not a bug** — works as designed, user misunderstanding, needs documentation or training instead of code.
@@ -204,8 +204,9 @@ https://github.com/<owner>/<repo>/blob/<ref>/<path>#L<startLine>-L<endLine>
 - `<repo>` — `pmm`, or the actual adjacent repo (`grafana`, `mongodb_exporter`, `percona-backup-mongodb`, `pmm-qa`, …).
 - `<ref>` — the commit SHA from the report header (`pmm HEAD`) for `percona/pmm`, or the SHA/tag you inspected for any other repo. Prefer a SHA (stable permalink); fall back to a branch name only when no SHA is available.
 - Keep the local `repo/path/to/file.go:123` in parentheses after the link so the citation stays greppable.
+- **The GitHub link is the only part written as a link, not code.** Write `[<path>#L<start>-L<end>](<url>)` so the URL renders as a clickable link; never wrap the URL itself in backticks. **Every other code reference keeps its backtick formatting as before** — symbols, bare file paths, and the parenthetical local path all stay code-styled; only the URL loses its backticks.
 
-Example: `https://github.com/percona/pmm/blob/<HEAD-SHA>/managed/services/agents/channel/channel.go#L120-L138` (`pmm/managed/services/agents/channel/channel.go:120`).
+Example: [managed/services/agents/channel/channel.go#L120-L138](https://github.com/percona/pmm/blob/<HEAD-SHA>/managed/services/agents/channel/channel.go#L120-L138) (`pmm/managed/services/agents/channel/channel.go:120`).
 
 ### 5.1 PMM architecture & code map (orient here first)
 
@@ -281,9 +282,9 @@ Classify the ticket into exactly one of the following (the 6-way split):
 
 Include a one-paragraph justification with evidence references (GitHub links to proto symbols / code / tests, doc URLs).
 
-This class drives the §9.2 outcome (so it isn't re-reasoned there):
+This class drives the §9.1 outcome (so it isn't re-reasoned there):
 
-| §7 class | Default §9.2 outcome |
+| §7 class | Default §9.1 outcome |
 |---|---|
 | (a) Defect / (b) Regression | `Ready for Dev` (or `Needs Info` if under-specified) |
 | (c) Upstream defect | `Upstream tracker — <link>` |
@@ -296,7 +297,7 @@ Independently, if §6 found a same-root-cause match, the outcome is `Duplicate o
 
 ## 8. Recommended fix
 
-Here you switch hats: act as a **principal engineer** turning the §5 root cause into a concrete, reviewable fix proposal. This is a proposal only (see §0) — no code, PRs, or commits.
+Here you switch hats: act as a **principal engineer** turning the §5 root cause into a concrete, reviewable fix proposal. This is a proposal (see §0) — code suggestion are welcome, but no PRs, or commits.
 
 Applicability by validity class (from §7):
 
@@ -337,21 +338,7 @@ The test(s) or manual reproduction that would prove the fix works — ideally a 
 
 The final section, and the deliverable.
 
-### 9.1 TL;DR
-
-The most-read part of the report: a self-contained brief a busy technical reader (EM, PM, Senior developer) can act on without reading the rest. Write it **last** (after §4–§9 are settled) though it appears first. Keep it to **one screen** — each bullet is a one- to four-sentence distillation of a section below, no new facts; cite the source section and add a §5.0 permalink for code claims. For non-code verdicts (Duplicate / Documentation / Needs Info / Won't Fix), let the **Root cause** and **Recommended fix** bullets shrink to a couple lines — never pad.
-
-Bullets, in this order:
-
-- **Verdict:** the §9.2 outcome + the §7 classification, on one line — e.g. `Ready for Dev · (a) Defect`.
-- **Problem summary:** what breaks, for whom, and under what trigger — the observable symptom in the user's terms (from §4.1).
-- **Impact / scope:** priority and customer impact (single report vs. multiple customers vs. theoretical), the affected component(s) and Tech label (§4.2 / §4.3), affected version(s), and the reproducibility verdict (§4.1).
-- **Root cause:** the responsible code construct and mechanism named in §5, with the key GitHub permalink (§5.0 convention) and status on `main` (`still present` / `fixed`). For non-code outcomes, state the equivalent finding (e.g. "duplicate of PMM-XXXXX", "behaves as designed per <doc>").
-- **Recommended fix:** the §8 approach in short paragraph — the primary code area, the effort size (§8.4), and the single biggest risk/unknown (§8.3). For non-code outcomes, replace with the routing rationale.
-- **Next steps / owner:** the concrete next action and suggested owner (§9.3), plus any duplicate or related keys (§6).
-- **Confidence:** the §9.4 level (`High` / `Medium` / `Low`) plus the one-line "what would change my mind?" — the single piece of evidence or check that would flip the verdict.
-
-### 9.2 Outcome
+### 9.1 Outcome
 
 Pick exactly one:
 
@@ -364,7 +351,7 @@ Pick exactly one:
 - `Upstream tracker — <link>` — keep open as a tracker for an upstream fix.
 - `Insufficient info — escalate to human triager`
 
-### 9.3 Suggested Jira changes
+### 9.2 Suggested Jira changes
 
 A flat list of changes the triager should apply manually. The assistant does not apply them. Each item must be actionable:
 
@@ -374,14 +361,32 @@ A flat list of changes the triager should apply manually. The assistant does not
 - `fixVersion` candidate, if known.
 - Suggested assignee or team, if known.
 
-### 9.4 Confidence
+### 9.3 Confidence
 
 - `High` / `Medium` / `Low`.
 - One sentence answering: "what would change my mind?"
 
-### 9.5 Open questions for the reporter
+### 9.4 Open questions for the reporter
 
 Only populated when the outcome is `Needs Info` or confidence is `Low`. Numbered, specific, answerable.
+
+### 9.5 TL;DR
+
+The most-read part of the report: a self-contained brief a busy technical reader (EM, PM, Senior developer) can act on without reading the rest. Write it **last** (after §4–§9 are settled); it closes the report as a standalone summary. Keep it to **one screen** — each bullet is a up to four-sentence distillation of a section below, no new facts; cite the source section and add a §5.0 permalinks for all code claims. 
+
+Format: a top-level `TL;DR` line, then the labelled lines below **in this order** — each
+label on its own line with its content as nested sub-bullets (one fact per sub-bullet):
+
+- **Verdict:** the §9.1 outcome + the §7 classification, on one line — e.g. `Ready for Dev · (a) Defect`.
+- **Problem summary:** one sub-bullet — what breaks, for whom, and under what trigger — the observable symptom in the user's terms (from §4.1).
+- **Impact / scope:** multiple sub bullets — priority and customer impact (single report vs. multiple customers vs. theoretical), the affected component(s) and Tech label (§4.2 / §4.3), affected version(s), and the reproducibility verdict (§4.1).
+- **Root cause:** the responsible code construct and mechanism named in §5, with the key GitHub permalink (§5.0 convention) and status on `main` (`still present` / `fixed`). For non-code outcomes, state the equivalent finding (e.g. "duplicate of PMM-XXXXX", "behaves as designed per <doc>").
+- **Recommended fix:** sub-bullets for the §8 approach — the primary code area, the effort size (§8.4), and risks/unknowns (§8.3). For non-code outcomes, replace with the routing rationale.
+- **Next steps / owner:** a sub-bullet naming the suggested owner/team (§9.2), then the concrete next actions as a numbered list.
+- **Duplicate tickets / Related tickets:** duplicate/superseded keys and related keys from §6, 
+- **Components / Labels:** the §4.3 components and §4.2 Tech labels, comma-separated.
+- **Confidence:** the §9.3 level (`High` / `Medium` / `Low`) plus the one-line "what would change my mind?".
+- **Open questions:** the §9.4 open questions as short numbered one-liners.
 
 ## 10. Uncertainty & handoff
 
@@ -400,8 +405,8 @@ Re-running is allowed and expected. Because the timestamp leads the filename, ea
 
 | Artifact | Pattern |
 |---|---|
-| Main report (Jira snapshot + all analysis) | `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/<YYYYMMDD-HHMMSS>-Triage-<issueType>-<KEY>-<slug>.md` |
-| Skipped / redirected (type or status gate) | `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/<YYYYMMDD-HHMMSS>-Triage-skipped-<issueType>-<KEY>-<slug>.md` |
+| Main report (Jira snapshot + all analysis) | `pmm-sdlc/ai-workflows/pmm-triage/audit-log/<YYYYMMDD-HHMMSS>-Triage-<issueType>-<KEY>-<slug>.md` |
+| Skipped / redirected (type or status gate) | `pmm-sdlc/ai-workflows/pmm-triage/audit-log/<YYYYMMDD-HHMMSS>-Triage-skipped-<issueType>-<KEY>-<slug>.md` |
 
 Where:
 
@@ -443,11 +448,11 @@ A run that completes all steps produces a file with the following section order:
 ### Relative effort size
 ### Suggested verification
 ## Verdict
-### TL;DR
 ### Outcome
 ### Suggested Jira changes
 ### Confidence
 ### Open questions for the reporter
+### TL;DR
 ## Assistant uncertainty log   (only if any)
 ## [BLOCKED: needs-human]      (only if autonomous mode stopped early)
 ```
@@ -466,7 +471,7 @@ Stable contract (don't break when adapting):
 
 - The single report file path and naming pattern (Appendix A).
 - The section order in Appendix B.
-- The verdict outcomes in §9.2.
+- The verdict outcomes in §9.1.
 - The 6-way split labels in §7.
 
 Everything else — sources to grep, label/component lists, search surfaces, time windows — is meant to be tuned to your team and product.

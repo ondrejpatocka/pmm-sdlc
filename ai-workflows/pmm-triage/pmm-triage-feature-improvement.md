@@ -44,7 +44,7 @@ The assistant must:
 
 - Read and act only with the access already configured on the operator's machine (Jira, GitHub, local repos). Do not require a specific tool.
 - Never modify the Jira ticket, never open PRs, never push commits. Everything produced (design options, effort, acceptance criteria) is a **proposal**, not an implementation.
-- Write only to `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/` inside the `pmm-sdlc` repo working tree.
+- Write only to `pmm-sdlc/ai-workflows/pmm-triage/audit-log/` inside the `pmm-sdlc` repo working tree.
 - Record every irreversible recommendation (disposition, verdict, suggested Jira changes, blocked questions) in the report so the human has an audit trail.
 - **Start each run stateless.** Base the triage only on this workflow document (and the `../skills/*.md` skills it references), the ticket URL, and the current state of the checked-out repos. Do **not** carry over conversation history, recalled memory, cached fetches, or earlier `audit-log/` reports (those are outputs, not inputs); re-fetch Jira and re-read code **live**. Every verdict must be reproducible from the ticket + code alone.
 
@@ -56,7 +56,7 @@ Fail fast if any of these is false. Record what failed and stop.
 - The Jira ticket is readable by the **`pmm-fetch-jira`** skill ([`../skills/pmm-fetch-jira.md`](../skills/pmm-fetch-jira.md), applied in §2.3).
 - The ticket issuetype is **New Feature** or **Improvement** (otherwise see §3).
 - The `pmm` repo is checked out at the current `main` branch. Record the branch name and HEAD commit in the report header.
-- `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/` exists inside the `pmm-sdlc` working tree. If missing, create it.
+- `pmm-sdlc/ai-workflows/pmm-triage/audit-log/` exists inside the `pmm-sdlc` working tree. If missing, create it.
 
 ## 2. Fetch the Jira ticket and initialize the report
 
@@ -67,7 +67,7 @@ This step produces the single report file used for the rest of the workflow. Eve
 Create (naming rules in Appendix A; timestamp leads so reports sort chronologically):
 
 ```
-pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/<YYYYMMDD-HHMMSS>-Triage-<issueType>-<KEY>-<slug>.md
+pmm-sdlc/ai-workflows/pmm-triage/audit-log/<YYYYMMDD-HHMMSS>-Triage-<issueType>-<KEY>-<slug>.md
 ```
 
 File requirements: UTF-8 (no BOM), LF line endings, human-readable on Windows/macOS/Linux.
@@ -120,7 +120,7 @@ This workflow triages only **New Feature** and **Improvement** tickets that are 
   Skipped: status=<actual status>. Triage only runs on New / Open / To Do.
   ```
 
-  Skipped/redirect filename: `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/<YYYYMMDD-HHMMSS>-Triage-skipped-<issueType>-<KEY>-<slug>.md`
+  Skipped/redirect filename: `pmm-sdlc/ai-workflows/pmm-triage/audit-log/<YYYYMMDD-HHMMSS>-Triage-skipped-<issueType>-<KEY>-<slug>.md`
 
 If the type and status are allowed, append a **Gate** section recording:
 
@@ -137,7 +137,7 @@ Evaluate whether the ticket is shaped well enough to act on. The **Completeness*
 - **Acceptance criteria:** Present / Partial / Missing. Are they testable/observable (not "the code should…")? Quote if present.
 - **Scope & Out-of-scope:** what the request explicitly includes/excludes; note unbounded scope.
 - **Design / UX (only if user-facing):** are mockups/flows/affected screens described? `N/A` for backend/API-only.
-- **Value & demand (compact):** who is asking (persona), how many (single request / several / many customers / strategic), and any stated business/strategic driver. Drives §9.3 priority.
+- **Value & demand (compact):** who is asking (persona), how many (single request / several / many customers / strategic), and any stated business/strategic driver. Drives §9.2 priority.
 - **Target persona:** DBA / SRE / developer / operator / platform admin — must be a real PMM persona.
 - **Readiness verdict:** one of `Well-specified` / `Needs shaping` / `Not enough info`.
 
@@ -181,7 +181,7 @@ Pick one or more components (cap at 3; pick the most likely if more match). Stat
 
 ### 4.4 Light sanity flags
 
-These are **preliminary** gut-checks, not the final call — §7 makes the authoritative disposition and §9.2 the outcome. Mark any that clearly apply, each with a one-sentence justification; don't force a fit.
+These are **preliminary** gut-checks, not the final call — §7 makes the authoritative disposition and §9.1 the outcome. Mark any that clearly apply, each with a one-sentence justification; don't force a fit.
 
 - **Already exists** — the capability appears to ship today or is achievable via configuration (verify in §5).
 - **Not a sensible PMM change** — wrong product, belongs to an external tool, or no credible place in this codebase.
@@ -205,8 +205,9 @@ https://github.com/<owner>/<repo>/blob/<ref>/<path>#L<startLine>-L<endLine>
 - `<repo>` — `pmm`, or the actual adjacent repo (`grafana`, `mongodb_exporter`, `percona-backup-mongodb`, `pmm-qa`, …).
 - `<ref>` — the commit SHA from the report header (`pmm HEAD`) for `percona/pmm`, or the SHA/tag you inspected for any other repo. Prefer a SHA (stable permalink); fall back to a branch name only when no SHA is available.
 - Keep the local `repo/path/to/file.go:123` in parentheses after the link so the citation stays greppable.
+- **The GitHub link is the only part written as a link, not code.** Write `[<path>#L<start>-L<end>](<url>)` so the URL renders as a clickable link; never wrap the URL itself in backticks. **Every other code reference keeps its backtick formatting as before** — symbols, bare file paths, and the parenthetical local path all stay code-styled; only the URL loses its backticks.
 
-Example: `https://github.com/percona/pmm/blob/<HEAD-SHA>/managed/services/backup/backup_service.go#L80-L110` (`pmm/managed/services/backup/backup_service.go:80`).
+Example: [managed/services/backup/backup_service.go#L80-L110](https://github.com/percona/pmm/blob/<HEAD-SHA>/managed/services/backup/backup_service.go#L80-L110) (`pmm/managed/services/backup/backup_service.go:80`).
 
 ### 5.1 Investigate (existence → location → feasibility)
 
@@ -266,13 +267,13 @@ Cross-cutting flags (note if they apply, independent of a–g):
 - **Actually a Bug → convert** — it's a defect, not an enhancement; recommend re-typing and routing to `pmm-triage-bug-workflow.md`.
 - **Belongs upstream** — the capability would live in Grafana / VictoriaMetrics / ClickHouse / an exporter; PMM ticket becomes a tracker.
 
-Include a one-paragraph justification with evidence references (GitHub links, doc URLs, ticket keys). This disposition drives the §9.2 outcome:
+Include a one-paragraph justification with evidence references (GitHub links, doc URLs, ticket keys). This disposition drives the §9.1 outcome:
 
-| §7 disposition | Default §9.2 outcome |
+| §7 disposition | Default §9.1 outcome |
 |---|---|
-| (a) Valid — New Feature / (b) Valid — Improvement | `Ready for Grooming` (or `Ready for Dev` if small and fully specified) |
+| (a) Valid — New Feature / (b) Valid — Improvement | `Ready for Refinement` (or `Ready for Dev` if small and fully specified) |
 | (c) Already possible | `Already possible — close with how-to` |
-| (d) Partially exists / extend | `Ready for Grooming` (scoped to the delta) |
+| (d) Partially exists / extend | `Ready for Refinement` (scoped to the delta) |
 | (e) Duplicate | `Duplicate of <KEY>` |
 | (f) Out of scope / Won't do | `Won't Do — out of scope/policy` |
 | (g) Needs product decision | `Needs Product Decision` |
@@ -282,7 +283,7 @@ Include a one-paragraph justification with evidence references (GitHub links, do
 
 ## 8. Recommended approach
 
-Append a **Recommended approach** section. Act as a **principal/staff engineer** turning the §4 need and §5 feasibility into a concrete, reviewable proposal for how PMM could build it. This is a proposal only — no code, PRs, or commits (see §0).
+Append a **Recommended approach** section. Act as a **principal/staff engineer** turning the §4 need and §5 feasibility into a concrete, reviewable proposal for how PMM could build it. This is a proposal (see §0) — code suggestion are welcome, but no PRs, or commits.
 
 Applicability by disposition (from §7):
 
@@ -327,38 +328,19 @@ A single T-shirt size with a one-line justification:
 
 If the ticket lacks testable acceptance criteria (§4.1), author them here — bulleted,
 observable, QA-verifiable (Given/When/Then or plain outcomes), including negative/edge
-cases. These are a proposal for the grooming discussion, not a commitment.
+cases. These are a proposal for the refinement discussion, not a commitment.
 
 ## 9. Verdict
 
 The final section, and the deliverable.
 
-### 9.1 TL;DR
-
-A self-contained brief a busy technical reader (eng lead, PM, senior developer) can act on
-without reading the rest. Write it **last** (after §4–§8 are settled) though it appears
-first. Keep it to **one screen** — each bullet is a one- to four-sentence distillation of a
-section below, no new facts; cite the source section and add a §5.0 permalink for code
-claims. For non-build outcomes (Already possible / Duplicate / Won't Do / Needs Info /
-Needs Product Decision), let the approach/effort bullets shrink to a line — never pad.
-
-Bullets, in this order:
-
-- **Verdict:** the §9.2 outcome + the §7 disposition, on one line — e.g. `Ready for Grooming · (b) Valid — Improvement`.
-- **Request:** the user story / problem — what capability, for whom, and why (from §4.1).
-- **Already exists?:** the §5.2 existence status (`new` / `extends existing` / `already possible`) with the key GitHub permalink or docs link.
-- **Recommended approach:** the §8 chosen option in one line — primary code area, effort size (§8.4), and the single biggest risk/unknown (§8.3). For non-build outcomes, replace with the routing rationale.
-- **Priority:** the §9.3 Value + Effort + Demand one-liner.
-- **Next steps / owner:** the concrete next action and suggested owner/team (§9.4), plus any duplicate/epic keys (§6).
-- **Confidence:** the §9.5 level (`High` / `Medium` / `Low`) plus the one-line "what would change my mind?"
-
-### 9.2 Outcome
+### 9.1 Outcome
 
 Pick exactly one:
 
-- `Ready for Grooming` — accepted in principle; needs breakdown/sizing/refinement.
+- `Ready for Refinement` — accepted in principle; needs breakdown/sizing/refinement.
 - `Ready for Dev` — small and fully specified; can be picked up as-is.
-- `Needs Info` — list the specific questions to ask the reporter (§9.6).
+- `Needs Info` — list the specific questions to ask the reporter (§9.5).
 - `Needs Product Decision` — feasible; blocked on a roadmap/strategy/priority call.
 - `Duplicate of <KEY>`
 - `Already possible — close with how-to`
@@ -366,17 +348,17 @@ Pick exactly one:
 - `Convert to Bug` — re-type and route to `pmm-triage-bug-workflow.md`.
 - `Upstream tracker — <link>` — keep open as a tracker for an upstream capability.
 
-### 9.3 Priority (Value + Effort + Demand)
+### 9.2 Priority (Value + Effort + Demand)
 
 A one-line recommended priority built from three compact signals — no false precision:
 
-- **Value** — `High` / `Medium` / `Low` (impact on the target persona / product).
+- **Value** — `High` / `Medium` / `Low` (+ impact on the target persona / product).
 - **Effort** — the §8.4 T-shirt size.
 - **Demand** — `single` / `several` / `many` customers, or `strategic`.
 
 State the recommended priority and a one-sentence rationale, e.g. *"High value · M effort · several customers → recommend prioritising this cycle."*
 
-### 9.4 Suggested Jira changes
+### 9.3 Suggested Jira changes
 
 A flat list of changes the triager should apply manually (the assistant does not apply them). Each must be actionable:
 
@@ -387,14 +369,39 @@ A flat list of changes the triager should apply manually (the assistant does not
 - Priority delta, if any (with justification).
 - Suggested owner or team, if known.
 
-### 9.5 Confidence
+### 9.4 Confidence
 
 - `High` / `Medium` / `Low`.
 - One sentence answering: "what would change my mind?"
 
-### 9.6 Open questions for the reporter
+### 9.5 Open questions for the reporter
 
 Only populated when the outcome is `Needs Info` / `Needs Product Decision`, or confidence is `Low`. Numbered, specific, answerable.
+
+### 9.6 TL;DR
+
+A self-contained brief a busy technical reader (eng lead, PM, senior developer) can act on
+without reading the rest. It is written **last** — after §4–§8 and §9.1–§9.5 are settled —
+and closes the report as a standalone summary. Keep it to **one screen**. Each labelled line
+is a distillation of a section above — no new facts; add a §5.0 permalink for every code
+claim, keeping the §5.0 code-link and citation format unchanged. For non-build outcomes
+(Already possible / Duplicate / Won't Do / Needs Info / Needs Product Decision), keep the
+same lines but replace build-specific content with the routing rationale.
+
+Format: a top-level `TL;DR` line, then the labelled lines below **in this order** — each
+label on its own line with its content as nested sub-bullets (one fact per sub-bullet):
+
+- **Verdict:** the §9.1 outcome + the §7 disposition, on one line — e.g. `Ready for Refinement · (d) Partially exists / extend`.
+- **Request:** one sub-bullet — the user story / problem: capability, for whom, and why, with the impact tag from §4.1 (e.g. `(HIGH impact)`).
+- **Already exists?:** lead with `Partly` / `No` / `Yes` (the §5.2 existence status), then one sub-bullet per part — what already ships (with the key GitHub permalink) and what is missing.
+- **Recommended approach:** sub-bullets for the §8 chosen option — what to build/reuse, the **primary** code site (§5.0 link), and the biggest risk/unknown (§8.3). For non-build outcomes, replace with the routing rationale.
+- **Priority:** three sub-bullets — **Value** (§9.2 level + impact on persona/product), **Effort** (§8.4 T-shirt size + one-line justification), **Demand** (`single` / `several` / `many` / `strategic`).
+- **Next steps / owner:** a sub-bullet naming the suggested owner/team (§9.3), then the concrete next actions as a numbered list.
+- **Duplicate tickets / Related tickets:** duplicate/superseded keys and related keys from §6, plus any `part of epic <KEY>`; omit a category if it has none.
+- **Components / Labels:** the §4.3 components and §4.2 Tech labels, comma-separated.
+- **Confidence:** the §9.4 level (`High` / `Medium` / `Low`) plus the one-line "what would change my mind?".
+- **Open questions:** the §9.5 open questions as short numbered one-liners.
+
 
 ## 10. Uncertainty & handoff
 
@@ -413,8 +420,8 @@ Re-running is allowed and expected. Because the timestamp leads the filename, ea
 
 | Artifact | Pattern |
 |---|---|
-| Main report (Jira snapshot + all analysis) | `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/<YYYYMMDD-HHMMSS>-Triage-<issueType>-<KEY>-<slug>.md` |
-| Skipped / redirected (type or status gate) | `pmm-sdlc/ai-workflows/pmm-triage-bug-ticket/audit-log/<YYYYMMDD-HHMMSS>-Triage-skipped-<issueType>-<KEY>-<slug>.md` |
+| Main report (Jira snapshot + all analysis) | `pmm-sdlc/ai-workflows/pmm-triage/audit-log/<YYYYMMDD-HHMMSS>-Triage-<issueType>-<KEY>-<slug>.md` |
+| Skipped / redirected (type or status gate) | `pmm-sdlc/ai-workflows/pmm-triage/audit-log/<YYYYMMDD-HHMMSS>-Triage-skipped-<issueType>-<KEY>-<slug>.md` |
 
 Where:
 
@@ -459,12 +466,12 @@ A run that completes all steps produces a file with the following section order:
 ### Effort size
 ### Proposed acceptance criteria
 ## Verdict
-### TL;DR
 ### Outcome
 ### Priority
 ### Suggested Jira changes
 ### Confidence
 ### Open questions for the reporter
+### TL;DR
 ## Assistant uncertainty log   (only if any)
 ## [BLOCKED: needs-human]      (only if autonomous mode stopped early)
 ```
@@ -489,6 +496,6 @@ Stable contract (don't break when adapting):
 
 - The report file path and naming pattern (Appendix A).
 - The section order in Appendix B.
-- The verdict outcomes in §9.2 and the 7-way disposition in §7.
+- The verdict outcomes in §9.1 and the 7-way disposition in §7.
 
 Everything else — search surfaces, label/component lists, time windows, priority model — is meant to be tuned to your team and product.
