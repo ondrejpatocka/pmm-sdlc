@@ -382,7 +382,7 @@ label on its own line with its content as nested sub-bullets (one fact per sub-b
 - **Impact / scope:** multiple sub bullets — priority and customer impact (single report vs. multiple customers vs. theoretical), the affected component(s) and Tech label (§4.2 / §4.3), affected version(s), and the reproducibility verdict (§4.1).
 - **Root cause:** the responsible code construct and mechanism named in §5, with the key GitHub permalink (§5.0 convention) and status on `main` (`still present` / `fixed`). For non-code outcomes, state the equivalent finding (e.g. "duplicate of PMM-XXXXX", "behaves as designed per <doc>").
 - **Recommended fix:** sub-bullets for the §8 approach — the primary code area, the effort size (§8.4), and risks/unknowns (§8.3). For non-code outcomes, replace with the routing rationale.
-- **Next steps / owner:** a sub-bullet naming the suggested owner/team (§9.2), then the concrete next actions as a numbered list.
+- **Proposed next steps / owner:** a sub-bullet naming the suggested owner/team (§9.2), then the concrete next actions as a numbered list.
 - **Duplicate tickets / Related tickets:** duplicate/superseded keys and related keys from §6, 
 - **Components / Labels:** the §4.3 components and §4.2 Tech labels, comma-separated.
 - **Confidence:** the §9.3 level (`High` / `Medium` / `Low`) plus the one-line "what would change my mind?".

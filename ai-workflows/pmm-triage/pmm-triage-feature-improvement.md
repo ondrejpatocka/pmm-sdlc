@@ -222,7 +222,7 @@ Orient with the **`pmm-arch-code-map`** skill ([`../skills/pmm-arch-code-map.md`
 - **Existence status** — one of: `New capability` (nothing like it today) / `Extends existing` (builds on shipped functionality — link it) / `Already possible` (exists or config-doable — link it) / `Not locatable` (can't map to code; say so, don't guess).
 - **Where it would live** — the owning component(s) + concrete entry-point files as §5.0 links.
 - **Feasibility note** (≤3 sentences) — tractable? what it touches? the single biggest technical constraint.
-- **References consulted** — parts of the §5.1 map used, plus any component `AGENTS.md`, `.proto`, or docs opened.
+- **References consulted** — parts of the §5.1 map used, plus `pmm/AGENTS.md` (conventions/tech-stack) and any component `AGENTS.md`, `.proto`, or docs opened.
 
 ### 5.3 Scope of search
 
@@ -283,7 +283,7 @@ Include a one-paragraph justification with evidence references (GitHub links, do
 
 ## 8. Recommended approach
 
-Append a **Recommended approach** section. Act as a **principal/staff engineer** turning the §4 need and §5 feasibility into a concrete, reviewable proposal for how PMM could build it. This is a proposal (see §0) — code suggestion are welcome, but no PRs, or commits.
+Append a **Recommended approach** section. Act as a **principal/staff engineer** turning the §4 need and §5 feasibility into a concrete, reviewable proposal for how PMM could build it. This is a proposal (see §0) — code suggestion are welcome, but no PRs, or commits. Ground the proposal in PMM's real tech stack and conventions (`pmm/AGENTS.md` plus the relevant component `AGENTS.md`) — e.g. reform migrations, `.proto` + `make gen` regeneration, testify/mockery tests — so the options are realistic to implement.
 
 Applicability by disposition (from §7):
 
@@ -396,7 +396,7 @@ label on its own line with its content as nested sub-bullets (one fact per sub-b
 - **Already exists?:** lead with `Partly` / `No` / `Yes` (the §5.2 existence status), then one sub-bullet per part — what already ships (with the key GitHub permalink) and what is missing.
 - **Recommended approach:** sub-bullets for the §8 chosen option — what to build/reuse, the **primary** code site (§5.0 link), and the biggest risk/unknown (§8.3). For non-build outcomes, replace with the routing rationale.
 - **Priority:** three sub-bullets — **Value** (§9.2 level + impact on persona/product), **Effort** (§8.4 T-shirt size + one-line justification), **Demand** (`single` / `several` / `many` / `strategic`).
-- **Next steps / owner:** a sub-bullet naming the suggested owner/team (§9.3), then the concrete next actions as a numbered list.
+- **Proposed next steps / owner:** a sub-bullet naming the suggested owner/team (§9.3), then the concrete next actions as a numbered list.
 - **Duplicate tickets / Related tickets:** duplicate/superseded keys and related keys from §6, plus any `part of epic <KEY>`; omit a category if it has none.
 - **Components / Labels:** the §4.3 components and §4.2 Tech labels, comma-separated.
 - **Confidence:** the §9.4 level (`High` / `Medium` / `Low`) plus the one-line "what would change my mind?".

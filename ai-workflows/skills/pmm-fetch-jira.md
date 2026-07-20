@@ -1,13 +1,13 @@
 ---
 name: pmm-fetch-jira
-description: Fetch a single PMM Jira ticket (by key or URL) into a `## Ticket snapshot` — unauthenticated REST API first, Atlassian MCP fallback, manual paste last. Use when a workflow needs one ticket's data.
+description: Fetch a single PMM Jira ticket (by key or URL) into a `## Ticket snapshot` — Atlassian MCP first, unauthenticated REST API fallback, manual paste last. Use when a workflow needs one ticket's data.
 argument-hint: "[Jira issue key or URL, e.g. PMM-15076]"
 ---
 
 # Skill: pmm-fetch-jira
 
 Fetch one PMM Jira ticket into a `## Ticket snapshot`. Referenced (not copied) by PMM
-workflows such as `pmm-triage-bug-ticket/pmm-triage-bug-workflow.md`. Tool-agnostic:
+workflows such as `pmm-triage/pmm-triage-bug.md`. Tool-agnostic:
 describe **what** to fetch and **what** to write, not which tool.
 
 - **Input (`$ARGUMENTS`):** a Jira issue key (e.g. `PMM-15076`) or a ticket URL. If a URL
@@ -18,8 +18,8 @@ describe **what** to fetch and **what** to write, not which tool.
 
 ## Getting the ticket data (try in order; use the first that yields data)
 
-1. **Unauthenticated REST API — primary, no setup.** Fetch `https://perconadev.atlassian.net/rest/api/3/issue/$ARGUMENTS?fields=summary,status,issuetype,priority,description,components,labels,fixVersions,versions,resolution,reporter,assignee,created,updated,parent,issuelinks,comment,attachment`. For public PMM tickets this returns JSON with (almost) every field below — no token, no connector. Field-name notes: `key` is in the response root; `versions` = affectsVersions, `comment` = comments, `attachment` = attachments. The v3 `description` is ADF (JSON) — add `&expand=renderedFields` for HTML, or use `/rest/api/2/issue/$ARGUMENTS` for wiki/plain-text fields if ADF is awkward.
-2. **Authenticated Atlassian MCP — escalation.** If REST returns 401/403 (restricted ticket) or omits a field you need (e.g. comments not visible anonymously), use the Atlassian connector: find a tool whose name ends in `searchJiraIssuesUsingJql` (or run `ToolSearch` with `select:searchJiraIssuesUsingJql`) and call it with `cloudId: perconadev.atlassian.net`, `jql: key = $ARGUMENTS`, `responseContentFormat: markdown`. Requires the connector authorized (claude.ai → Settings → Connectors, or `/mcp` in Claude Code).
+1. **Authenticated Atlassian MCP — primary.** Use the Atlassian connector: find a tool whose name ends in `searchJiraIssuesUsingJql` (or run `ToolSearch` with `select:searchJiraIssuesUsingJql`) and call it with `cloudId: perconadev.atlassian.net`, `jql: key = $ARGUMENTS`, `responseContentFormat: markdown`. When the connector is authorized this returns the richest data — restricted tickets, comments not visible anonymously, and rendered (non-ADF) text. Requires the connector authorized (claude.ai → Settings → Connectors, or `/mcp` in Claude Code). If the connector is **not authorized / unavailable** (e.g. headless or non-interactive runs), the tool isn't found, or the call errors, escalate to REST.
+2. **Unauthenticated REST API — escalation, no setup.** Fetch `https://perconadev.atlassian.net/rest/api/3/issue/$ARGUMENTS?fields=summary,status,issuetype,priority,description,components,labels,fixVersions,versions,resolution,reporter,assignee,created,updated,parent,issuelinks,comment,attachment`. Needs no token or connector, so it's the reliable fallback for autonomous runs. For public PMM tickets this returns JSON with (almost) every field below. Field-name notes: `key` is in the response root; `versions` = affectsVersions, `comment` = comments, `attachment` = attachments. The v3 `description` is ADF (JSON) — add `&expand=renderedFields` for HTML, or use `/rest/api/2/issue/$ARGUMENTS` for wiki/plain-text fields if ADF is awkward. Note: REST returns 401/403/404 on restricted tickets and can't see comments hidden from anonymous users — which is why MCP is tried first.
 3. **Manual paste — last resort.** Ask the operator to paste the ticket; build the snapshot from that.
 
 **Never fetch the `/browse/<key>` web page for data** — it returns an empty JavaScript SPA shell. Record the method + endpoint used in the snapshot. If only some fields came back, stamp the snapshot `⚠ Partial — <fields missing>` and continue; do not stop.

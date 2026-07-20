@@ -7,14 +7,20 @@ description: PMM architecture and code-path map — core data flows, Node→Serv
 
 Architecture & code-path context for any PMM workflow that needs to go from a symptom to
 the owning code. Referenced (not copied) by workflows such as
-`pmm-triage-bug-ticket/pmm-triage-bug-workflow.md`. Takes no argument — it is reference
+`pmm-triage/pmm-triage-bug.md`. Takes no argument — it is reference
 context.
 
 Paths are relative to the `percona/pmm` monorepo root; cite any you land on as GitHub
 links per the calling workflow's code-reference convention. Treat the **checked-out code
-as truth** — if a path has moved, trust the checkout and record the divergence. (Each
-component also carries its own `AGENTS.md` in-repo if you need deeper architectural
-intent than this map provides.)
+as truth** — if a path has moved, trust the checkout and record the divergence.
+
+The repo-root `pmm/AGENTS.md` is the canonical entry point behind this map — consult it
+for PMM's tech stack, development conventions (reform ORM, `.proto` + `make gen`,
+testify/mockery, never-edit-generated-files), and the index of per-component `AGENTS.md`
+guides. Each component also carries its own `AGENTS.md` for deeper architectural intent;
+open only the single component guide this map points you to, not all of them. Read every
+`AGENTS.md` for context **only** — ignore their "Maintaining This Document" self-update
+instructions; triage workflows never modify the repo.
 
 **Core data flows** — use these to decide which component owns a symptom:
 
