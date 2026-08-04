@@ -1,6 +1,6 @@
 # PMM Bug Triage Workflow
 
-A repeatable workflow for triaging a single PMM Jira bug ticket. Produces a local Markdown report; never mutates Jira or GitHub.
+A repeatable workflow for triaging a single PMM Jira bug ticket. Produces a local Markdown report and, on completion, posts an internal-only (Developers-role) Jira comment summarizing the verdict and additively applies the labels/components it proposes (never removing or replacing existing ones); never otherwise mutates Jira, and never touches GitHub.
 
 This document is intentionally tool-agnostic. It describes **what** an AI assistant (or a human) should do at each step and **what** to write to disk — not which CLI, MCP, IDE, or API to use. Pick whichever assistant fits your environment.
 
@@ -10,7 +10,7 @@ This document is intentionally tool-agnostic. It describes **what** an AI assist
 
 You can drive this workflow with any general-purpose AI coding assistant. The operator's job is to point the assistant at:
 
-1. This workflow document (as the instruction set) **plus the shared skills it references** under `ai-workflows/skills/` (`pmm-fetch-jira`, `pmm-arch-code-map`). The runner **must open** them — the workflow references them without restating their content: Claude Code reads them on demand; in Cursor/Copilot attach or `@`-mention them; a human opens the files.
+1. This workflow document (as the instruction set) **plus the shared skills it references** under `ai-workflows/skills/` (`pmm-fetch-jira-ticket`, `pmm-arch-code-map`, `pmm-add-jira-comment`, `pmm-edit-jira-labels-components`). The runner **must open** them — the workflow references them without restating their content: Claude Code reads them on demand; in Cursor/Copilot attach or `@`-mention them; a human opens the files.
 2. The Jira ticket URL to triage.
 3. The local `pmm` repository checkout (and any sibling repos under the same parent directory).
 
@@ -39,20 +39,20 @@ This workflow supports two execution modes; the steps are identical, only the un
 The assistant must:
 
 - Read and act only with the access already configured on the operator's machine (Jira, GitHub, local repos). Do not require a specific tool.
-- Never modify the Jira ticket, never open PRs, never push commits.
-- Write only to `pmm-sdlc/ai-workflows/pmm-triage/audit-log/` inside the `pmm-sdlc` repo working tree.
+- The only permitted Jira mutations are (1) posting one internal, Developers-role-restricted, triage-summary comment via the `pmm-add-jira-comment` skill (§9.6), and (2) additively applying the labels/components proposed in the TL;DR via the `pmm-edit-jira-labels-components` skill (§9.7) — existing labels and components are always preserved, never removed or replaced. Never change priority, status, or fixVersion; never remove a label or component; never open PRs; never push commits — those stay manual, per §9.2.
+- Write only to `pmm-sdlc/ai-workflows/pmm-triage/triage-reports-log/` inside the `pmm-sdlc` repo working tree.
 - Record every irreversible decision (label/component choices, verdict, blocked questions) in the report so the human has an audit trail.
-- **Start each run stateless.** Base the triage only on this workflow document (and the `../skills/*.md` skills it references), the ticket URL, and the current state of the checked-out repos. Do **not** carry over conversation history, recalled memory, cached fetches, or earlier `audit-log/` reports (those are outputs, not inputs); re-fetch Jira and re-read code **live**. Every verdict must be reproducible from the ticket + code alone. (Per-tool clean-session mechanics: see the invoke section.)
+- **Start each run stateless.** Base the triage only on this workflow document (and the `../skills/*.md` skills it references), the ticket URL, and the current state of the checked-out repos. Do **not** carry over conversation history, recalled memory, cached fetches, or earlier `triage-reports-log/` reports (those are outputs, not inputs); re-fetch Jira and re-read code **live**. Every verdict must be reproducible from the ticket + code alone. (Per-tool clean-session mechanics: see the invoke section.)
 
 ## 1. Preconditions
 
 Fail fast if any of these is false. Record what failed and stop.
 
 - The Jira ticket URL is provided (example: `https://perconadev.atlassian.net/browse/PMM-15076`).
-- The Jira ticket is readable by the **`pmm-fetch-jira`** skill ([`../skills/pmm-fetch-jira.md`](../skills/pmm-fetch-jira.md), applied in §2.3).
+- The Jira ticket is readable by the **`pmm-fetch-jira-ticket`** skill ([`../skills/pmm-fetch-jira-ticket.md`](../skills/pmm-fetch-jira-ticket.md), applied in §2.3).
 - The ticket issuetype is **Bug** (otherwise see §3).
 - The `pmm` repo is checked out at the current `main` branch. Record the branch name and HEAD commit in the report header.
-- `pmm-sdlc/ai-workflows/pmm-triage/audit-log/` exists inside the `pmm-sdlc` working tree. If missing, create it.
+- `pmm-sdlc/ai-workflows/pmm-triage/triage-reports-log/` exists inside the `pmm-sdlc` working tree. If missing, create it.
 
 ## 2. Fetch the Jira ticket and initialize the report
 
@@ -63,7 +63,7 @@ This step produces the single report file used for the rest of the workflow. Eve
 Create (naming rules in Appendix A; timestamp leads so reports sort chronologically):
 
 ```
-pmm-sdlc/ai-workflows/pmm-triage/audit-log/<YYYYMMDD-HHMMSS>-Triage-<issueType>-<KEY>-<slug>.md
+pmm-sdlc/ai-workflows/pmm-triage/triage-reports-log/<YYYYMMDD-HHMMSS>-Triage-<issueType>-<KEY>-<slug>.md
 ```
 
 File requirements: UTF-8 (no BOM), LF line endings, human-readable on Windows/macOS/Linux.
@@ -91,7 +91,7 @@ Write the header immediately, before any Jira fetch or analysis, so an aborted r
 
 ### 2.3 Fetch and append the Jira ticket snapshot
 
-Fetch the ticket and build the `## Ticket snapshot` section by applying the **`pmm-fetch-jira`** skill ([`../skills/pmm-fetch-jira.md`](../skills/pmm-fetch-jira.md)) with the ticket URL (from the header) as its argument. This snapshot is the input to every analysis step that follows.
+Fetch the ticket and build the `## Ticket snapshot` section by applying the **`pmm-fetch-jira-ticket`** skill ([`../skills/pmm-fetch-jira-ticket.md`](../skills/pmm-fetch-jira-ticket.md)) with the ticket URL (from the header) as its argument. This snapshot is the input to every analysis step that follows.
 
 If **no** method in the skill yields usable data: in **assisted mode**, ask the operator to paste the ticket (or authorize the connector) and record the exchange; in **autonomous mode**, finish a header-only report named `<YYYYMMDD-HHMMSS>-Triage-<issueType>-<KEY>-jira-unreachable.md`, list the methods tried and why each failed, and stop. Never delete the partially-written report — the header alone is still useful as an audit trail.
 
@@ -116,7 +116,7 @@ This workflow triages only **Bug** tickets that are still open for triage.
   Skipped: status=<actual status>. Triage only runs on New / Open / To Do.
   ```
 
-  Skipped/redirect filename: `pmm-sdlc/ai-workflows/pmm-triage/audit-log/<YYYYMMDD-HHMMSS>-Triage-skipped-<issueType>-<KEY>-<slug>.md`
+  Skipped/redirect filename: `pmm-sdlc/ai-workflows/pmm-triage/triage-reports-log/<YYYYMMDD-HHMMSS>-Triage-skipped-<issueType>-<KEY>-<slug>.md`
 
 If the type and status are allowed, append a **Gate** section recording:
 
@@ -144,10 +144,10 @@ Evaluate whether the ticket contains enough information to act. The **Completene
 
 Pick zero or more of the following Tech labels. State the evidence (quote from ticket) for each pick.
 
-- `Tech/MySQL` — MySQL DB monitoring and tooling.
-- `Tech/MongoDB` — MongoDB DB monitoring and tooling.
-- `Tech/PostgreSQL` — PostgreSQL DB monitoring and tooling.
-- `Tech/Valkey` — Valkey **or** Redis DB monitoring and tooling (one label covers both).
+- `tech/MySQL` — MySQL DB monitoring and tooling.
+- `tech/MongoDB` — MongoDB DB monitoring and tooling.
+- `tech/PostgreSQL` — PostgreSQL DB monitoring and tooling.
+- `tech/Valkey` — Valkey **or** Redis DB monitoring and tooling (one label covers both).
 
 ### 4.3 Components detected
 
@@ -161,22 +161,22 @@ Pick one or more components (cap at 3; pick the most likely if more match). Stat
 - `Advisors` — advisors feature.
 - `Backups` — backups feature.
 - `Inventory` — inventory management of nodes, services, agents.
-- `pmm-client` — PMM client distribution.
-- `pmm-agent` — client agent component.
-- `pmm-admin` — CLI component.
+- `PMM Client` — PMM client distribution.
+- `PMM Agent` — client agent component.
+- `PMM Admin` — CLI component.
 - `Docker` — Docker installation.
 - `K8s` — Kubernetes installation.
 - `HA` — High Availability installation.
 - `OpenShift` — OpenShift installation.
 - `AMI` — AWS installation.
-- `Exporters` — `*_exporter` repos (mysqld_exporter, mongodb_exporter, postgres_exporter, etc.).
+- `Exporter` — `*_exporter` repos (mysqld_exporter, mongodb_exporter, postgres_exporter, etc.); the project also carries per-exporter components (`MySQLd_Exporter`, `MongoDB_Exporter`, `Postgres_Exporter`, `ProxySQL_Exporter`, `RDS_Exporter`, `Azure_Exporter`, `Node_Exporter`, `Valkey/Redis_Exporter`) — pick the specific one when the ticket clearly names a single exporter, else this generic bucket.
 - `VictoriaMetrics` — VM time-series store.
 - `ClickHouse` — ClickHouse storage for QAN.
-- `API` — gRPC / REST API surface.
-- `UI` — PMM frontend.
-- `Updates` — upgrade / update flow.
-- `Security` — auth, RBAC, TLS, secrets.
+- `PMM UI` — PMM frontend.
+- `PMM Update Service` — upgrade / update flow.
 - `Telemetry` — telemetry collection.
+
+(`API` and `Security` were dropped from this list — no PMM Jira component matches either name exactly; note API-surface or security-relevant findings in the Findings/Rationale text instead of a component pick.)
 
 ### 4.4 Light sanity flags
 
@@ -353,7 +353,10 @@ Pick exactly one:
 
 ### 9.2 Suggested Jira changes
 
-A flat list of changes the triager should apply manually. The assistant does not apply them. Each item must be actionable:
+A flat list of changes the triager should apply manually. Label/component **additions**
+listed here are auto-applied in §9.7 (from the TL;DR's `Components / Labels:` line, not
+re-parsed from this list) — everything else below (removals, priority, fixVersion,
+assignee) stays manual; the assistant does not apply those. Each item must be actionable:
 
 - Labels to add / remove (with justification).
 - Components to add / remove (with justification).
@@ -372,21 +375,49 @@ Only populated when the outcome is `Needs Info` or confidence is `Low`. Numbered
 
 ### 9.5 TL;DR
 
-The most-read part of the report: a self-contained brief a busy technical reader (EM, PM, Senior developer) can act on without reading the rest. Write it **last** (after §4–§9 are settled); it closes the report as a standalone summary. Keep it to **one screen** — each bullet is a up to four-sentence distillation of a section below, no new facts; cite the source section and add a §5.0 permalinks for all code claims. 
+The most-read part of the report: a self-contained brief a busy technical reader (EM, PM, Senior developer) can act on without reading the rest. Write it **last**, after every earlier section is settled; it closes the report as a standalone summary. Keep it to **one screen** — each bullet is an up to four-sentence distillation of an earlier finding, no new facts; add a GitHub permalink (per the code-reference convention) for every code claim, but do not cite report section numbers here — the TL;DR must read as a standalone brief, not a cross-referenced excerpt.
 
 Format: a top-level `TL;DR` line, then the labelled lines below **in this order** — each
 label on its own line with its content as nested sub-bullets (one fact per sub-bullet):
 
-- **Verdict:** the §9.1 outcome + the §7 classification, on one line — e.g. `Ready for Dev · (a) Defect`.
-- **Problem summary:** one sub-bullet — what breaks, for whom, and under what trigger — the observable symptom in the user's terms (from §4.1).
-- **Impact / scope:** multiple sub bullets — priority and customer impact (single report vs. multiple customers vs. theoretical), the affected component(s) and Tech label (§4.2 / §4.3), affected version(s), and the reproducibility verdict (§4.1).
-- **Root cause:** the responsible code construct and mechanism named in §5, with the key GitHub permalink (§5.0 convention) and status on `main` (`still present` / `fixed`). For non-code outcomes, state the equivalent finding (e.g. "duplicate of PMM-XXXXX", "behaves as designed per <doc>").
-- **Recommended fix:** sub-bullets for the §8 approach — the primary code area, the effort size (§8.4), and risks/unknowns (§8.3). For non-code outcomes, replace with the routing rationale.
-- **Proposed next steps / owner:** a sub-bullet naming the suggested owner/team (§9.2), then the concrete next actions as a numbered list.
-- **Duplicate tickets / Related tickets:** duplicate/superseded keys and related keys from §6, 
-- **Components / Labels:** the §4.3 components and §4.2 Tech labels, comma-separated.
-- **Confidence:** the §9.3 level (`High` / `Medium` / `Low`) plus the one-line "what would change my mind?".
-- **Open questions:** the §9.4 open questions as short numbered one-liners.
+- **Verdict:** the outcome and classification, on one line — e.g. `Ready for Dev · (a) Defect`.
+- **Problem summary:** one sub-bullet — what breaks, for whom, and under what trigger — the observable symptom in the user's terms.
+- **Impact / scope:** multiple sub bullets — priority and customer impact (single report vs. multiple customers vs. theoretical), the affected component(s) and Tech label, affected version(s), and the reproducibility verdict.
+- **Root cause:** the responsible code construct and mechanism, with the key GitHub permalink and status on `main` (`still present` / `fixed`). For non-code outcomes, state the equivalent finding (e.g. "duplicate of PMM-XXXXX", "behaves as designed per <doc>").
+- **Recommended fix:** sub-bullets for the recommended approach — the primary code area, the effort size, and risks/unknowns. For non-code outcomes, replace with the routing rationale.
+- **Proposed next steps / owner:** a sub-bullet naming the suggested owner/team, then the concrete next actions as a numbered list.
+- **Duplicate tickets / Related tickets:** duplicate/superseded keys and related keys found during de-duplication.
+- **Components / Labels:** the detected components and Tech labels, comma-separated.
+- **Confidence:** the confidence level (`High` / `Medium` / `Low`) plus the one-line "what would change my mind?".
+- **Open questions:** the open questions for the reporter as short numbered one-liners.
+
+### 9.6 Post triage summary as an internal Jira comment
+
+Build the comment text from the §9.5 TL;DR block, verbatim, then apply the
+**`pmm-add-jira-comment`** skill ([`../skills/pmm-add-jira-comment.md`](../skills/pmm-add-jira-comment.md))
+with the ticket URL (from the header) and that TL;DR text as arguments. Append the
+skill's `## Jira comment` output section to the report.
+
+This step runs for every run that reaches a §9.1 outcome, regardless of which outcome —
+it does not run for §3 skip/redirect exits or §10 `[BLOCKED: needs-human]` stops, since
+those exit before reaching §9. A failure to post (per the skill's fallback chain) does
+not fail the whole report: the report still completes, with the `## Jira comment`
+section documenting what happened.
+
+### 9.7 Additively apply proposed labels/components
+
+Take the labels and components from the §9.5 TL;DR's `Components / Labels:` line, then
+apply the **`pmm-edit-jira-labels-components`** skill
+([`../skills/pmm-edit-jira-labels-components.md`](../skills/pmm-edit-jira-labels-components.md))
+with the ticket URL, that labels list, and that components list as arguments. Append the
+skill's `## Jira labels & components update` output section to the report.
+
+This step runs under the same applicability rule as §9.6 (every run that reaches a §9.1
+outcome; not for §3 skip/redirect or §10 `[BLOCKED: needs-human]` exits). A failure or
+partial failure to apply (per the skill's fallback chain) does not fail the whole
+report: the report still completes, with the output section documenting what happened.
+Existing labels and components on the ticket are never removed or replaced — only added
+to.
 
 ## 10. Uncertainty & handoff
 
@@ -405,8 +436,8 @@ Re-running is allowed and expected. Because the timestamp leads the filename, ea
 
 | Artifact | Pattern |
 |---|---|
-| Main report (Jira snapshot + all analysis) | `pmm-sdlc/ai-workflows/pmm-triage/audit-log/<YYYYMMDD-HHMMSS>-Triage-<issueType>-<KEY>-<slug>.md` |
-| Skipped / redirected (type or status gate) | `pmm-sdlc/ai-workflows/pmm-triage/audit-log/<YYYYMMDD-HHMMSS>-Triage-skipped-<issueType>-<KEY>-<slug>.md` |
+| Main report (Jira snapshot + all analysis) | `pmm-sdlc/ai-workflows/pmm-triage/triage-reports-log/<YYYYMMDD-HHMMSS>-Triage-<issueType>-<KEY>-<slug>.md` |
+| Skipped / redirected (type or status gate) | `pmm-sdlc/ai-workflows/pmm-triage/triage-reports-log/<YYYYMMDD-HHMMSS>-Triage-skipped-<issueType>-<KEY>-<slug>.md` |
 
 Where:
 
@@ -453,6 +484,8 @@ A run that completes all steps produces a file with the following section order:
 ### Confidence
 ### Open questions for the reporter
 ### TL;DR
+### Jira comment
+### Jira labels & components update
 ## Assistant uncertainty log   (only if any)
 ## [BLOCKED: needs-human]      (only if autonomous mode stopped early)
 ```
@@ -462,10 +495,10 @@ A run that completes all steps produces a file with the following section order:
 This document is intentionally a plain `.md` file so it can be:
 
 - **Forked per repo / per project.** Pin a copy at the project root or in `docs/` and edit the allowed statuses, label list, component list, or repo scope to match your team. This workflow references shared skills (see below), so a fully self-contained fork should inline them.
-- **Composed from shared skills.** Reusable, workflow-agnostic pieces live in `ai-workflows/skills/` as skill-formatted `.md` files (YAML frontmatter + `argument-hint`) and are referenced by name + relative link, not copied — currently [`pmm-fetch-jira`](../skills/pmm-fetch-jira.md) (§2.3) and [`pmm-arch-code-map`](../skills/pmm-arch-code-map.md) (§5.1). Referencing sections point to the skill rather than restate it (single source of truth), so **the runner must open the linked skill** (see the invoke section). They are *not* auto-invoked — they live outside `.claude/skills/`; promote a copy there if you want Claude to auto-load it. New PMM workflows (e.g. a feature/enhancement triage) should reference the same skills. Edit shared behavior in the skill, workflow-specific behavior in the section; keep skills free of any one workflow's specifics (report layout, verdict labels, modes).
+- **Composed from shared skills.** Reusable, workflow-agnostic pieces live in `ai-workflows/skills/` as skill-formatted `.md` files (YAML frontmatter + `argument-hint`) and are referenced by name + relative link, not copied — currently [`pmm-fetch-jira-ticket`](../skills/pmm-fetch-jira-ticket.md) (§2.3), [`pmm-arch-code-map`](../skills/pmm-arch-code-map.md) (§5.1), [`pmm-add-jira-comment`](../skills/pmm-add-jira-comment.md) (§9.6), and [`pmm-edit-jira-labels-components`](../skills/pmm-edit-jira-labels-components.md) (§9.7). Referencing sections point to the skill rather than restate it (single source of truth), so **the runner must open the linked skill** (see the invoke section). They are *not* auto-invoked — they live outside `.claude/skills/`; promote a copy there if you want Claude to auto-load it. New PMM workflows (e.g. a feature/enhancement triage) should reference the same skills. Edit shared behavior in the skill, workflow-specific behavior in the section; keep skills free of any one workflow's specifics (report layout, verdict labels, modes).
 - **Mirrored as a tool-specific rule.** Cursor (`.cursor/rules/*.mdc`), Claude Code (`.claude/` or `CLAUDE.md`), Continue (`.continuerules`), Aider (`CONVENTIONS.md`), etc. — copy the body (inlining the skills), add whatever frontmatter that tool expects, keep the section numbering stable so cross-references survive.
 - **Run unattended.** The autonomous-mode behavior in §0 and §10 is designed for scripted / scheduled runs; pair it with a small wrapper that resolves the ticket URL, invokes your assistant, and archives the resulting report file.
-- **Hardened or relaxed.** If your team wants the assistant to also write Jira comments or change labels, lift the guardrail in §0 explicitly — do not let it drift. If your team wants stricter behavior (e.g. mandatory STR), promote a "Light sanity flag" in §4.4 into a hard gate.
+- **Hardened or relaxed.** Posting the internal triage-summary comment (§9.6) and additively applying proposed labels/components (§9.7) are already enabled, with the §0 guardrail explicitly carved out for both — don't let further mutation drift in beside them. Removing/replacing a label or component, and changing priority, status, or fixVersion, stay manual-only today, per §9.2; extend the §0 exception explicitly if your team wants to automate those too. If your team wants stricter behavior (e.g. mandatory STR), promote a "Light sanity flag" in §4.4 into a hard gate.
 
 Stable contract (don't break when adapting):
 

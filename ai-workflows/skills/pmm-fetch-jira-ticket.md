@@ -1,10 +1,10 @@
 ---
-name: pmm-fetch-jira
+name: pmm-fetch-jira-ticket
 description: Fetch a single PMM Jira ticket (by key or URL) into a `## Ticket snapshot` — Atlassian MCP first, unauthenticated REST API fallback, manual paste last. Use when a workflow needs one ticket's data.
 argument-hint: "[Jira issue key or URL, e.g. PMM-15076]"
 ---
 
-# Skill: pmm-fetch-jira
+# Skill: pmm-fetch-jira-ticket
 
 Fetch one PMM Jira ticket into a `## Ticket snapshot`. Referenced (not copied) by PMM
 workflows such as `pmm-triage/pmm-triage-bug.md`. Tool-agnostic:
