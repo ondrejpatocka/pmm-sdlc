@@ -39,7 +39,7 @@ This workflow supports two execution modes; the steps are identical, only the un
 The assistant must:
 
 - Read and act only with the access already configured on the operator's machine (Jira, GitHub, local repos). Do not require a specific tool.
-- The only permitted Jira mutations are (1) posting one internal, Developers-role-restricted, triage-summary comment via the `pmm-add-jira-comment` skill (§9.6), and (2) additively applying the labels/components proposed in the TL;DR via the `pmm-edit-jira-labels-components` skill (§9.7) — existing labels and components are always preserved, never removed or replaced. Never change priority, status, or fixVersion; never remove a label or component; never open PRs; never push commits — those stay manual, per §9.2.
+- The only permitted Jira mutations are (1) posting one internal, Developers-role-restricted, triage-summary comment via the `pmm-add-jira-comment` skill (§9.6), and (2) additively applying the labels/components proposed in the TL;DR, plus the constant `ai-triage` marker label, via the `pmm-edit-jira-labels-components` skill (§9.7) — existing labels and components are always preserved, never removed or replaced. Never change priority, status, or fixVersion; never remove a label or component; never open PRs; never push commits — those stay manual, per §9.2.
 - Write only to `pmm-sdlc/ai-workflows/pmm-triage/triage-reports-log/` inside the `pmm-sdlc` repo working tree.
 - Record every irreversible decision (label/component choices, verdict, blocked questions) in the report so the human has an audit trail.
 - **Start each run stateless.** Base the triage only on this workflow document (and the `../skills/*.md` skills it references), the ticket URL, and the current state of the checked-out repos. Do **not** carry over conversation history, recalled memory, cached fetches, or earlier `triage-reports-log/` reports (those are outputs, not inputs); re-fetch Jira and re-read code **live**. Every verdict must be reproducible from the ticket + code alone. (Per-tool clean-session mechanics: see the invoke section.)
@@ -406,14 +406,17 @@ section documenting what happened.
 
 ### 9.7 Additively apply proposed labels/components
 
-Take the labels and components from the §9.5 TL;DR's `Components / Labels:` line, then
-apply the **`pmm-edit-jira-labels-components`** skill
+Take the labels and components from the §9.5 TL;DR's `Components / Labels:` line, add
+the constant marker label `ai-triage` to that labels list unconditionally — every ticket
+that gets the §9.6 triage-summary comment is marked this way, regardless of which Tech
+labels were detected — then apply the **`pmm-edit-jira-labels-components`** skill
 ([`../skills/pmm-edit-jira-labels-components.md`](../skills/pmm-edit-jira-labels-components.md))
 with the ticket URL, that labels list, and that components list as arguments. Append the
 skill's `## Jira labels & components update` output section to the report.
 
 This step runs under the same applicability rule as §9.6 (every run that reaches a §9.1
-outcome; not for §3 skip/redirect or §10 `[BLOCKED: needs-human]` exits). A failure or
+outcome; not for §3 skip/redirect or §10 `[BLOCKED: needs-human]` exits) — so `ai-triage`
+is added on every run that posts the triage-summary comment. A failure or
 partial failure to apply (per the skill's fallback chain) does not fail the whole
 report: the report still completes, with the output section documenting what happened.
 Existing labels and components on the ticket are never removed or replaced — only added
