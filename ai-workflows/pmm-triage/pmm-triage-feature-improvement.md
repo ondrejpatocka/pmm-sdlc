@@ -5,7 +5,7 @@ ticket. Produces a local Markdown report and, on completion, posts an internal-o
 (Developers-role) Jira comment summarizing the verdict and additively applies the
 labels/components it proposes (never removing or replacing existing ones); never
 otherwise mutates Jira, and never touches GitHub. Sibling to
-`pmm-triage-bug-workflow.md` (same folder, shared skills and `triage-reports-log/`); for **Bug**
+`pmm-triage-bug.md` (same folder, shared skills and `triage-reports-log/`); for **Bug**
 tickets use that workflow instead.
 
 This document is intentionally tool-agnostic. It describes **what** an AI assistant (or a
@@ -110,7 +110,7 @@ This workflow triages only **New Feature** and **Improvement** tickets that are 
   - If the type is `Bug`, write a one-line redirect report and stop:
 
     ```markdown
-    Redirected: issuetype=Bug. Use pmm-triage-bug-workflow.md for this ticket.
+    Redirected: issuetype=Bug. Use pmm-triage-bug.md for this ticket.
     ```
   - For any other type (Task, Epic, Story, Sub-task, …), write a one-line skipped report and stop:
 
@@ -267,7 +267,7 @@ Append a **Disposition** section. Classify the ticket into exactly one of the fo
 
 Cross-cutting flags (note if they apply, independent of a–g):
 
-- **Actually a Bug → convert** — it's a defect, not an enhancement; recommend re-typing and routing to `pmm-triage-bug-workflow.md`.
+- **Actually a Bug → convert** — it's a defect, not an enhancement; recommend re-typing and routing to `pmm-triage-bug.md`.
 - **Belongs upstream** — the capability would live in Grafana / VictoriaMetrics / ClickHouse / an exporter; PMM ticket becomes a tracker.
 
 Include a one-paragraph justification with evidence references (GitHub links, doc URLs, ticket keys). This disposition drives the §9.1 outcome:
@@ -348,7 +348,7 @@ Pick exactly one:
 - `Duplicate of <KEY>`
 - `Already possible — close with how-to`
 - `Won't Do — out of scope/policy`
-- `Convert to Bug` — re-type and route to `pmm-triage-bug-workflow.md`.
+- `Convert to Bug` — re-type and route to `pmm-triage-bug.md`.
 - `Upstream tracker — <link>` — keep open as a tracker for an upstream capability.
 
 ### 9.2 Priority (Value + Effort + Demand)
@@ -530,7 +530,7 @@ A run that completes all steps produces a file with the following section order:
 
 ## Appendix C — Adapting this workflow
 
-This is the **feature/improvement** sibling of `pmm-triage-bug-workflow.md`; the two share
+This is the **feature/improvement** sibling of `pmm-triage-bug.md`; the two share
 guardrails, the `../skills/` skills (`pmm-fetch-jira-ticket`, `pmm-arch-code-map`,
 `pmm-add-jira-comment` §9.7, `pmm-edit-jira-labels-components` §9.8), and the
 `triage-reports-log/`. When a ticket turns out to be a defect, the `Convert to Bug` outcome hands

@@ -16,14 +16,14 @@ You can drive this workflow with any general-purpose AI coding assistant. The op
 
 Suggested ways to invoke it with the most common assistants:
 
-- **Cursor IDE:** open this file in your workspace, then prompt: *"Follow `pmm-triage-bug-workflow.md` for ticket `<URL>`."* Optionally save a slimmer copy as a Cursor rule under `.cursor/rules/` to attach it automatically.
+- **Cursor IDE:** open this file in your workspace, then prompt: *"Follow `pmm-triage-bug.md` for ticket `<URL>`."* Optionally save a slimmer copy as a Cursor rule under `.cursor/rules/` to attach it automatically.
 - **Claude (Code, Desktop, or API):** attach this file as context, then prompt: *"Use the attached workflow to triage `<URL>`."* In Claude Code, place a copy at the repo root or under `.claude/` so it's picked up by default.
-- **GitHub Copilot Chat:** open this file in the editor, then in the chat panel use `#file:pmm-triage-bug-workflow.md` and prompt: *"Triage `<URL>` per this workflow."*
+- **GitHub Copilot Chat:** open this file in the editor, then in the chat panel use `#file:pmm-triage-bug.md` and prompt: *"Triage `<URL>` per this workflow."*
 - **CLI / scripted runs:** pipe the workflow plus the ticket URL into your assistant of choice; the workflow's autonomous-mode behavior (see §0 and §10) is designed for unattended runs.
 
 **Run each ticket in a fresh session (required — see the stateless guardrail in §0).** One ticket per session so a previous ticket's context, memory, or cached data cannot bias the next:
 
-- **Claude Code:** prefer a one-shot headless run per ticket — e.g. `claude -p "Follow pmm-triage-bug-workflow.md for <URL>"` — because each `-p` invocation starts with empty conversation history. Interactively, run `/clear` between tickets. Do **not** use `--continue` / `--resume` (they restore the prior conversation). Loading `CLAUDE.md` and this workflow doc is fine — that is instruction context, not prior-run state.
+- **Claude Code:** prefer a one-shot headless run per ticket — e.g. `claude -p "Follow pmm-triage-bug.md for <URL>"` — because each `-p` invocation starts with empty conversation history. Interactively, run `/clear` between tickets. Do **not** use `--continue` / `--resume` (they restore the prior conversation). Loading `CLAUDE.md` and this workflow doc is fine — that is instruction context, not prior-run state.
 - **Cursor / Claude Desktop / Copilot Chat:** open a **new chat** per ticket instead of continuing an existing thread; re-attach the workflow doc each time.
 - **Scripted / scheduled runs:** invoke a new assistant process per ticket and pass only the workflow doc + ticket URL; never reuse a session/handle across tickets.
 
