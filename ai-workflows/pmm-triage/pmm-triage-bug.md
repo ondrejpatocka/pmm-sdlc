@@ -43,6 +43,7 @@ The assistant must:
 - Write only to `pmm-sdlc/ai-workflows/pmm-triage/triage-reports-log/` inside the `pmm-sdlc` repo working tree.
 - Record every irreversible decision (label/component choices, verdict, blocked questions) in the report so the human has an audit trail.
 - **Start each run stateless.** Base the triage only on this workflow document (and the `../skills/*.md` skills it references), the ticket URL, and the current state of the checked-out repos. Do **not** carry over conversation history, recalled memory, cached fetches, or earlier `triage-reports-log/` reports (those are outputs, not inputs); re-fetch Jira and re-read code **live**. Every verdict must be reproducible from the ticket + code alone. (Per-tool clean-session mechanics: see the invoke section.)
+- **Prior triage evidence on this ticket is input, not a shortcut trigger.** An existing `ai-triage` label or an earlier AI-authored triage comment on the ticket does not change how this workflow runs. Fold that evidence into the §3 Gate section as one more fact to record — parallel to "Existing proposed solutions" — never as a signal to skip, shorten, or replace any of §1–§9 with a lighter-weight pass. Every run, first or repeat, produces the full report and the full fixed-format §9.6 footer; see §11 for re-running specifically.
 
 ## 1. Preconditions
 
@@ -411,9 +412,12 @@ the skill's `## Jira comment` output section to the report.
 
 This step runs for every run that reaches a §9.1 outcome, regardless of which outcome —
 it does not run for §3 skip/redirect exits or §10 `[BLOCKED: needs-human]` stops, since
-those exit before reaching §9. A failure to post (per the skill's fallback chain) does
-not fail the whole report: the report still completes, with the `## Jira comment`
-section documenting what happened.
+those exit before reaching §9. There is no third comment category — no lighter-weight
+"recheck" or "delta" comment format is defined — and every run that reaches a §9.1
+outcome posts this exact TL;DR-plus-footer comment whether or not the ticket already
+carries a prior triage comment or the `ai-triage` label (§0, §11). A failure to post (per
+the skill's fallback chain) does not fail the whole report: the report still completes,
+with the `## Jira comment` section documenting what happened.
 
 ### 9.7 Additively apply proposed labels/components
 
@@ -444,7 +448,9 @@ Both modes must leave the report on disk in a readable state.
 
 ## 11. Re-running on the same ticket
 
-Re-running is allowed and expected. Because the timestamp leads the filename, each run produces a fresh, chronologically-sorted report; previous reports are preserved for audit — do not overwrite or delete earlier runs. Since each run is stateless (§0), re-running the same ticket after `main` has moved is how you confirm whether a bug is still present or now fixed.
+Re-running is allowed and expected. A re-run is not a distinct, lighter mode: it executes the full §1–§9 sequence again, at the same depth as a first run — the same Completeness check, the same Codebase verification, the same de-duplication, the same Validity assessment, the same Recommended fix, the same §9.5 TL;DR — and produces a new, complete report ending in a full TL;DR-based Jira comment with the exact fixed-format §9.6 footer (§0, §9.6). An existing `ai-triage` label or a prior AI-authored triage comment on the ticket (surfaced in the §3 Gate, per §0) is not grounds for a shorter "still valid?" report; there is no such abbreviated format (§9.6).
+
+The reason to re-run is that each run is stateless (§0): running the same ticket again after `main` has moved is how you confirm whether the bug is still present or now fixed — that is a reason to re-run, not a description of some lighter way of running. Because the timestamp leads the filename, each run produces a fresh, chronologically-sorted report file; previous reports are preserved for audit — do not overwrite or delete earlier runs.
 
 ## Appendix A — Filename conventions
 
