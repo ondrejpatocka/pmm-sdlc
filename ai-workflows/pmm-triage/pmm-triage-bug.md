@@ -403,10 +403,7 @@ pmm@<short SHA>[, <adjacent-repo>@<short SHA> …]. Proposal only — no code ch
 
 using the `Assistant` value and repo SHA(s) established in §2.2. The leading
 `pmm-triage-bug.md` tag names the workflow document that produced this comment,
-whichever tool ran it — this doc has no "plugin" concept of its own and is run by
-directly attaching the file, so the document filename is the stable identifier, letting
-a reader tell this apart from a comment posted by the `pmm-jira-triage` or `pmm-dev`
-Claude Code plugins.
+whichever tool ran it.
 
 Then apply the **`pmm-add-jira-comment`** skill ([`../skills/pmm-add-jira-comment.md`](../skills/pmm-add-jira-comment.md))
 with the ticket URL (from the header) and the TL;DR-plus-footer text as arguments. Append
