@@ -393,10 +393,24 @@ label on its own line with its content as nested sub-bullets (one fact per sub-b
 
 ### 9.6 Post triage summary as an internal Jira comment
 
-Build the comment text from the §9.5 TL;DR block, verbatim, then apply the
-**`pmm-add-jira-comment`** skill ([`../skills/pmm-add-jira-comment.md`](../skills/pmm-add-jira-comment.md))
-with the ticket URL (from the header) and that TL;DR text as arguments. Append the
-skill's `## Jira comment` output section to the report.
+Build the comment text from the §9.5 TL;DR block, then append a one-line provenance
+footer:
+
+```
+Automated triage (pmm-triage-bug.md, <tool>/<exact model ID>), verified against
+pmm@<short SHA>[, <adjacent-repo>@<short SHA> …]. Proposal only — no code changes made.
+```
+
+using the `Assistant` value and repo SHA(s) established in §2.2. The leading
+`pmm-triage-bug.md` tag names the workflow document that produced this comment,
+whichever tool ran it — this doc has no "plugin" concept of its own and is run by
+directly attaching the file, so the document filename is the stable identifier, letting
+a reader tell this apart from a comment posted by the `pmm-jira-triage` or `pmm-dev`
+Claude Code plugins.
+
+Then apply the **`pmm-add-jira-comment`** skill ([`../skills/pmm-add-jira-comment.md`](../skills/pmm-add-jira-comment.md))
+with the ticket URL (from the header) and the TL;DR-plus-footer text as arguments. Append
+the skill's `## Jira comment` output section to the report.
 
 This step runs for every run that reaches a §9.1 outcome, regardless of which outcome —
 it does not run for §3 skip/redirect exits or §10 `[BLOCKED: needs-human]` stops, since
